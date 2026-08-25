@@ -2,7 +2,7 @@
 
 Server-authoritative multiplayer Romanian Tile Rummy for 2–4 players, implemented as a Nakama Go runtime plugin. This is the **Go** version — migrated from TypeScript on 2026-08-25 (`55c7f3b`). See `docs/project-baseline.md` §13 for migration rationale.
 
-The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 8–9 — Post-opening and round completion**: validated runs/sets with jokers, 50-point opening with scoring, `MELD_INITIAL`/`MELD_NEW`, `EXTEND_MELD`, `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER` and `ROUND_COMPLETE` win detection (`rack==0` after meld or discard, `Winner`, `RoundComplete` no further gameplay) authoritative table play (see `docs/rules-decisions.md` and `docs/daily-log.md`).
+The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 10 — Snapshot hardening and reconnection**: validated runs/sets with jokers, 50-point opening, `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`, `DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`, `ROUND_COMPLETE` win detection, and centralized `PublicView`/`PrivateView` versioned `1` with reconnection `PrivateSnapshot` per `Seat` (see `docs/rules-decisions.md` and `docs/daily-log.md`).
 
 ## Prerequisites
 
@@ -221,12 +221,11 @@ Envelope: `{"v":1,"op":6,"requestId":"...","payload":{...}}` (`internal/protocol
 
 ## Next Steps (Roadmap)
 
-After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`/`DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`/`ROUND_COMPLETE` (Days 13–19, commits `de0d727`/`1b666c8`/`6b0d980`/`456c045`/`0da5f3a`/`8dd8ea9`/this):
+After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`/`DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`/`ROUND_COMPLETE`/`SNAPSHOT HARDENING` (Days 13–20, commits `de0d727`/`1b666c8`/`6b0d980`/`456c045`/`0da5f3a`/`8dd8ea9`/`2d278a5`/`3e1b92a`):
 
-- **Day 20** — `State visibility`/`reconnection`/`snapshot` hardening (centralized `PublicView`/`PrivateView`, reconnect private rack, versioned snapshots, redaction suite).
-- **Day 21** — `Test harness`/`deterministic end-to-end simulation` (fixed deck/order, full flow, invariant after every action).
-- **Days 22–23** already done: developer tooling (`docs/protocol.md` etc.) and refactor; next polish is final backend regression and optional minimal client adapter.
-- **Win rule reference:** `docs/rules-decisions.md:6.1` — `rack==0` after any legal `DISCARD` or melding (`MELD/EXTEND/REPLACE/PICKUP`) → `RoundComplete`, `Winner`, no further gameplay, `CheckTileConservation` still `106`.
+- **Day 21** — `Test harness`/`deterministic end-to-end simulation` (fixed deck/order, simulate `start`→`opening discard`→`draw/discard`→`initial meld`→`extension`→`previous/pickup`→`replace`→`round completion`, invariants after every action).
+- **Days 22–23** already done: developer tooling and refactor; Day 20 snapshot hardening now also done — next polish is final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and optional minimal client adapter (`Day 24`).
+- **Reconnection reference:** `internal/match/rummy_match.go:56`/`79` keeps `Players`/`Racks` on `MatchLeave` and re-sends `PrivateView` `OpServerState 100` to that `Seat` only; `docs/state-machine.md` and `docs/protocol.md` now document `PrivateSnapshot` versioned `1`.
 
 ---
 

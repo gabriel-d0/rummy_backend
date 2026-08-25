@@ -47,3 +47,15 @@ func ValidateBatchOwnership(batch Batch, rack []tile.TileInstance) error {
 	}
 	return nil
 }
+
+// ValidateBatchScore checks that the batch total is >=50 points per docs/rules-decisions.md:1.4.
+func ValidateBatchScore(batch Batch) error {
+	total, err := TotalScore(batch)
+	if err != nil {
+		return err
+	}
+	if total < 50 {
+		return fmt.Errorf("total %d <50", total)
+	}
+	return nil
+}

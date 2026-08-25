@@ -1,0 +1,65 @@
+name: rummy_backend
+
+# Local development stack for Romanian Tile Rummy (Nakama authoritative)
+# - Postgres 15-alpine as Nakama database (avoids CockroachDB weight for dev)
+# - Nakama 3.26.0 (heroiclabs/nakama) — mirrors registry.heroiclabs.com/heroiclabs/nakama:3.37.0
+#   latest. Pinned to 3.26.0 which is already pulled and verified on this host.
+#   Upgrade: change image tag + re-run `docker compose pull && docker compose up -d`.
+# - Host port 5433 for Postgres to avoid collision with tinybot's 5432 (see docs/project-baseline.md:6).
+# - Nakama ports 7349 (gRPC), 7350 (HTTP API), 7351 (Console) — defaults, no collision.
+# - Data persists in named volume `pgdata`. Removal: `docker compose down -v`.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: rummy_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nakama}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdb}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nakama}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  nakama:
+    image: heroiclabs/nakama:3.26.0
+    container_name: rummy_nakama
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - |
+        /nakama/nakama migrate up --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/${POSTGRES_DB:-nakama}?sslmode=disable && exec /nakama/nakama --name rummy_backend --database.address postgres:${POSTGRES_PASSWORD:-localdb}@postgres:5432/${POSTGRES_DB:-nakama}?sslmode=disable --logger.level DEBUG --session.token_expiry_sec 7200 --metrics.prometheus_port 0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./nakama/data:/nakama/data
+    expose:
+      - "7349"
+      - "7350"
+      - "7351"
+    ports:
+      - "${NAKAMA_GRPC_PORT:-7349}:7349"
+      - "${NAKAMA_API_PORT:-7350}:7350"
+      - "${NAKAMA_CONSOLE_PORT:-7351}:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    name: rummy_backend_pgdata

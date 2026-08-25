@@ -1,0 +1,13 @@
+# Nakama local development config — mounted at /nakama/data/local.yml
+# Most settings are passed as CLI flags in compose.yml; this file exists
+# to demonstrate where local overrides live and to allow future runtime
+# configuration (match tick rate, limits, logger) without changing compose.
+name: rummy_backend
+logger:
+  level: DEBUG
+  stdout: true
+session:
+  token_expiry_sec: 7200
+  refresh_token_expiry_sec: 86400
+metrics:
+  prometheus_port: 0

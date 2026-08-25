@@ -91,8 +91,12 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 
 	case OpClientExtendMeld:
 		var p struct {
-			MeldId  *string  `json:"meldId"`
-			TileIds []string `json:"tileIds"`
+			MeldId    *string  `json:"meldId"`
+			TileIds   []string `json:"tileIds"`
+			JokerReps map[string]struct {
+				Colour string `json:"colour"`
+				Rank   int    `json:"rank"`
+			} `json:"jokerReps,omitempty"`
 		}
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("extend payload bad JSON: %v", err)}
@@ -102,6 +106,17 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 		}
 		if len(p.TileIds) == 0 {
 			return &ParseError{Code: "bad_payload", Message: "extend.tileIds must have at least 1"}
+		}
+		for jid, rep := range p.JokerReps {
+			if jid == "" {
+				return &ParseError{Code: "bad_payload", Message: "extend.jokerReps key empty"}
+			}
+			if rep.Colour == "" {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("extend.jokerReps[%q] colour required", jid)}
+			}
+			if rep.Rank < 1 || rep.Rank > 13 {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("extend.jokerReps[%q] rank must be 1..13", jid)}
+			}
 		}
 		return nil
 

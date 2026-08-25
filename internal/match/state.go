@@ -79,8 +79,10 @@ func (d DiscardEntry) Validate() error {
 
 // TableMeld is a public meld on the table. Joker representations are explicit
 // and immutable once placed — see docs/rules-decisions.md:1.3.
+// Kind is "run" or "set" and is stable after creation; it is used to revalidate extensions.
 type TableMeld struct {
 	ID        string                                    // stable meld UUID
+	Kind      string                                    // "run" or "set" (stable, for revalidation on extend)
 	Tiles     []tile.TileInstance                       // ordered tiles as placed
 	JokerReps map[tile.TileInstanceId]tile.TileInstance // joker ID → represented tile (colour+rank)
 	OwnerSeat Seat                                      // seat who created it (for info, extensions allowed from any opened player)
@@ -89,6 +91,9 @@ type TableMeld struct {
 func (m TableMeld) Validate() error {
 	if m.ID == "" {
 		return fmt.Errorf("meld ID empty")
+	}
+	if m.Kind != "" && m.Kind != "run" && m.Kind != "set" {
+		return fmt.Errorf("meld %q invalid kind %q", m.ID, m.Kind)
 	}
 	if len(m.Tiles) < 3 {
 		return fmt.Errorf("meld %q has %d tiles, need >=3", m.ID, len(m.Tiles))

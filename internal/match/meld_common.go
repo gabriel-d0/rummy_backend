@@ -195,6 +195,7 @@ func applyMeldBatch(st *RoundState, seat Seat, originalRack []tile.TileInstance,
 	for _, m := range scoringMelds {
 		tm := TableMeld{
 			ID:        string(m.ID),
+			Kind:      string(m.Kind),
 			Tiles:     m.Tiles,
 			JokerReps: m.JokerReps,
 			OwnerSeat: seat,

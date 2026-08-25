@@ -10,3 +10,7 @@ coverage
 .DS_Store
 README.md
 docs
+tmp
+temp
+*.log
+*.so

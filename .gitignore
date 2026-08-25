@@ -1,11 +1,14 @@
-# Dependencies
+# Dependencies — Go (if vendored)
+vendor/
+
+# Legacy Node artifacts — kept for reference after TS→Go migration 2026-08-25
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Build outputs
+# Build outputs — Go plugin + legacy TS
 dist/
 build/
 out/
@@ -15,6 +18,8 @@ out/
 coverage/
 .nyc_output/
 *.tsbuildinfo
+*.so
+/backend.so
 
 # Environment — never commit real secrets
 .env

@@ -1,10 +1,12 @@
 name: rummy_backend
 
-# Local development stack for Romanian Tile Rummy (Nakama authoritative)
+# Local development stack for Romanian Tile Rummy (Nakama authoritative — Go runtime)
 # - Postgres 15-alpine as Nakama database (avoids CockroachDB weight for dev)
-# - Nakama 3.26.0 (heroiclabs/nakama) — mirrors registry.heroiclabs.com/heroiclabs/nakama:3.37.0
-#   latest. Pinned to 3.26.0 which is already pulled and verified on this host.
-#   Upgrade: change image tag + re-run `docker compose pull && docker compose up -d`.
+# - Nakama 3.26.0 + Go plugin built via heroiclabs/nakama-pluginbuilder:3.26.0 (see Dockerfile).
+#   Plugin is baked as /nakama/data/modules/rummy_backend.so; only local.yml is host-mounted
+#   so rebuild is required after Go code changes: `docker compose up --build -d`.
+#   Pinned to 3.26.0 which is already pulled and verified on this host.
+#   Upgrade: change image tag in Dockerfile + compose.yml, then `docker compose build && docker compose up -d`.
 # - Host port 5433 for Postgres to avoid collision with tinybot's 5432 (see docs/project-baseline.md:6).
 # - Nakama ports 7349 (gRPC), 7350 (HTTP API), 7351 (Console) — defaults, no collision.
 # - Data persists in named volume `pgdata`. Removal: `docker compose down -v`.
@@ -32,7 +34,10 @@ services:
     restart: unless-stopped
 
   nakama:
-    image: heroiclabs/nakama:3.26.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rummy_backend:local
     container_name: rummy_nakama
     entrypoint:
       - "/bin/sh"
@@ -43,7 +48,9 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./nakama/data:/nakama/data
+      # Mount only config so image-baked plugin at /nakama/data/modules/rummy_backend.so is not hidden.
+      # Host ./nakama/data edge files (e.g. local.yml edits) can be reflected without rebuild.
+      - ./nakama/data/local.yml:/nakama/data/local.yml:ro
     expose:
       - "7349"
       - "7350"

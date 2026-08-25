@@ -59,3 +59,16 @@ func ValidateBatchScore(batch Batch) error {
 	}
 	return nil
 }
+
+// ValidateBatchHasRun checks that at least one meld in the batch is a valid run
+// per docs/rules-decisions.md:1.4 (opening must include at least one run).
+func ValidateBatchHasRun(batch Batch) error {
+	for _, m := range batch.Melds {
+		if m.Kind == meld.KindRun {
+			if err := meld.ValidateRun(m); err == nil {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("batch must contain at least one valid run")
+}

@@ -265,6 +265,14 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			continue
 		}
 
+		// Draw previous discard: MustDraw, opened, not opening blocked, tail to rack
+		if op == protocol.OpClientDrawPreviousDiscard {
+			if err := handleDrawPreviousDiscard(st, senderId, requestId, op, dispatcher, msg, logger); err != nil {
+				continue
+			}
+			continue
+		}
+
 		// Initial meld: Playing MeldOrDiscard → validates 50+ with run, marks HasOpened, stays MeldOrDiscard
 		if op == protocol.OpClientMeldInitial {
 			if err := handleMeldInitial(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {

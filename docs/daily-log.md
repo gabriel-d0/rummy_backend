@@ -79,18 +79,74 @@ This log records each “one clearly scoped change per day” per `AGENTS.md:5` 
 
 ---
 
-## Current State (after Day 35)
+## Phase 5 — Turn state machine and basic actions (cont. Days 36–42)
 
-- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol`.
-- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
-- **Docs:** `docs/project-baseline.md` (Day 1 + Go `§13`), `docs/rules-decisions.md` (189 lines, `TODO(product)`), `docs/terminology.md` (59 lines), `README.md` (153 lines `quick start` `services & ports` `rebuild` `RPC smoke` `troubleshooting`), `AGENTS.md` source, `docs/daily-log.md` (this file).
-- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
-- **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED` (`pg_isready` `healthcheck` `InitModule` `rummy_backend.so` `console 200` `RPC health`).
-
-## Next (Day 36+)
-
-Per roadmap **Phase 5 Day 36 — Opening discard protection** → Day 37 `Turn advance` → Day 38 `Draw from stock` `DRAW_STOCK` etc., all via `MatchLoop` + `internal/match` pure validators (`Day 10` sets + `Day 11` runs + `Day 12` scoring) and `protocol` opcodes already stable. Then **Phase 6 Meld rules** etc., to `Day 135` MVP. This log will be appended per `git add` `commit -m "<type>: <focused message>"` `git push` per `AGENTS.md:205`.
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **36** | `9326b13` `feat: protect opening discard from pickup` | `internal/match/discard.go` (62 lines) `discard_test.go` | `CanPickupPreviousDiscard` / `CanPickupDiscardForMeld` reject `IsOpeningDiscard` and empty row; `TestProtectOpeningDiscard` verifies blocked tile never selectable. |
+| **37** | `6505813` `refactor: extract anticlockwise turn advance helper` | `internal/match/turn.go` (24 lines) `turn_test.go` | `AdvanceTurn` `(current+1)%n` → `MustDraw` with `ValidatePlayers`/`CurrentSeat` checks; reused in opening discard; tests `NextSeat` loops `0→1→0` for 2/3/4 players. |
+| **38** | `5a51ac6` `feat: handle draw from stock` | `internal/match/rummy_match.go` `handleDrawStock` (30 lines) `draw_test.go` (85 lines) | `OpClientDrawStock` in `Playing/MustDraw` pops `Stock` top, appends to `Racks[current]`, `TurnPhase→MeldOrDiscard`; `stock empty` → `bad_request`; tests `Success` (stock-1, rack+1, top `s2`), `WrongPhase`, `NotYourTurn`, conservation. |
+| **39** | `47b153b` `feat: handle normal discard and turn rotation` | `internal/match/rummy_match.go` `handleNormalDiscard` (45 lines) `normal_discard_test.go` | `OpClientDiscard` in `Playing/MeldOrDiscard` validates ownership, appends `DiscardEntry{IsOpeningDiscard:false, Index=len}`, `AdvanceTurn`; tests `Success` (rack-1, discard+1, `CurrentSeat` 0→1), `BeforeDrawRejected`, `ForeignTile`, turn order 2/3/4. |
+| **40** | `53ffe5e` `test: verify discard row ordering` | `internal/match/discard_order_test.go` | Ensures discard row preserves chronological order, `Index` tracks position, opening flagged distinct, conservation. |
+| **41** | `69a3a61` `test: add turn-loop integration` | `internal/match/turn_loop_test.go` | Full loop `OpeningDiscard→DrawStock→Discard→next MustDraw` for 2/3/4 players, checks phase transitions and inventory. |
+| **42** | `f21975a` `test: document and verify empty-stock MVP behavior` | `internal/match/empty_stock_test.go` | Documents `docs/rules-decisions.md:6.2` decision: `stock empty` → only discard pickup allowed else dead round; tests `DrawStockEmpty` error, `StockExhaustedNoWinner`, `PickupStillAllowed`. |
 
 ---
 
-*Generated from `git log --oneline --reverse` `36c2c59..b4e7cdb` (35 commits) on `2026-08-25`. For `what changed` per day see `git show --stat <hash>`.*
+## Phase 6 — Meld rules: sets, runs, and jokers (Days 43–55)
+
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **43** | `04acd8d` `feat: define canonical meld representation` | `internal/rules/meld/meld.go` (104 lines) `meld_test.go` | `Meld{ID,Kind,Tiles,JokerReps}` with `Validate` (duplicate tile, missing rep, rep for non-joker), `New` copy-safe; stable ID preserved. |
+| **44** | `415bbd0` `feat: validate 3- and 4-tile sets` | `internal/rules/meld/set.go` (partial) `set_test.go` | `ValidateSet` checks `3–4` tiles, same rank, distinct colours; tests valid 3/4, duplicate colour, rank mismatch. |
+| **44b** | `94b99d8` `feat: return structured validation errors for sets` | `internal/rules/meld/errors.go` `set_errors_test.go` | `ValidationError{Code,Field,Message}` with codes `invalid_kind`/`invalid_size`/`rank_mismatch`/`duplicate_colour`; not bool-only. |
+| **46** | `74b5118` `feat: support jokers in sets` | `internal/rules/meld/set.go` joker branch `set_joker_test.go` | Jokers via `JokerReps` explicit `rank==set rank` distinct colour, `real>=2*joker` (3-tiles max 1 joker, 4-tiles max 1); tests legal/illegal joker, ratio. |
+| **48** | `24aec0d` `feat: validate basic same-colour consecutive runs` | `internal/rules/meld/run.go` (48 lines) `run_test.go` | `ValidateRun` same colour, `len>=3`, consecutive, no jokers yet; tests standard runs. |
+| **49** | `004336c` `test: document low-Ace runs` | `run_lowace_test.go` | `1-2-3` valid, longer low `1-2-3-4`, tests. |
+| **50** | `0a294ec` `feat: support high-Ace runs` | `run_highace_test.go` | `12-13-1` valid, `10-11-12-13-1` valid, while rejecting `13-1-2`; `contains` high-Ace as `14`. |
+| **51** | `3adf97a` `test: explicitly reject Ace in middle` | `run_invalid_ace_test.go` | `13-1-2`, `12-13-1-2` etc. invalid, ensures Ace never middle. |
+| **52** | `546d35e` `feat: support jokers in runs` | `run_joker_test.go` | Jokers with explicit `rep Colour==run colour` `Rank` filling gap, `real>=2*joker`, immutable rep. |
+| **53** | `f86f519` `test: enforce real>=2*joker ratio for runs` | `run_ratio_test.go` | 6-tile max 2 jokers, 7-tile max 2, etc., ratio enforcement. |
+| **54** | `e35e6b9` `test: ensure joker rep immutability` | `immutable_test.go` | Table `JokerReps` map is copied, cannot be silently reinterpreted (`12-13-J` declared as `1` stays `1`). |
+| **55** | `f726c6f` `test: add comprehensive meld matrix` | `matrix_test.go` (100+ cases) | Valid/invalid sets, runs, Ace, joker, ratio, duplicate tiles — reusable by scoring. |
+
+---
+
+## Phase 7 — Opening meld and scoring (Days 56–66)
+
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **56** | `ba98df0` `feat: add tile scoring` | `internal/rules/scoring/scoring.go` `scoring_test.go` | `ScoreTile` `2–9:5`, `10–13:10`, Ace low `5` vs high `10` vs Ace-set `25`, Joker = represented; tests 5/10/25. |
+| **57** | `1209e9b` `feat: score runs` | `scoring/run.go` `run_test.go` | `ScoreRun` validates run then sums with `isLowAceRun`/`isHighAceRun`; handles Joker. |
+| **58** | `cc0c847` `feat: score sets` | `scoring/set.go` `set_test.go` | `ScoreSet` validates set then sums with `isAceSet` (25 each); Joker delegating. |
+| **59** | `a4ed4b0` `test: verify joker scoring` | `joker_test.go` | Joker equals represented tile value in low/high/Ace contexts. |
+| **60** | `b52a7f5` `feat: define opening meld batch model` | `scoring/batch.go` `batch_test.go` | `Batch{PlayerID,Melds}` `TotalScore` sums `ScoreRun/Set`; tests `30` and `90` (Ace set 75+low run 15). |
+| **61** | `da5eb68` `feat: validate opening meld ownership` | `scoring/validate.go` `validate_test.go` | `ValidateBatchOwnership` checks each meld `Validate()`, `ValidateRun/Set`, all `tileIds` owned, no duplicate across melds; tests foreign tile, duplicate. |
+| **62** | `5aaaa28` `feat: enforce 50-point minimum` | `scoring/validate_score_test.go` | `ValidateBatchScore` `total>=50` (30 rejected, 60 accepted), `exactly 50` passes. |
+| **63** | `4c1e4e1` `feat: require at least one run` | `scoring/validate_has_run_test.go` | `ValidateBatchHasRun` requires ≥1 `KindRun` valid; sets-only 60 rejected. |
+| **64** | `67aeebf` `test: ensure no duplicate tile across melds` | `validate_duplicate_test.go` | Duplicate `TileID` across `m1`/`m2` rejected; `ValidateInitialBatch` composed. |
+| **65** | `df5b179` `feat: validate full initial meld batch` | `validate_initial_test.go` `validate_initial.go` | `ValidateInitialBatch` = ownership+score+hasRun; tests valid 50 (3 runs), 45 rejected, no-run 60 rejected, duplicate rejected. |
+| **66/13** | `de0d727` `feat: allow initial table melds` | `internal/match/meld_initial.go` (250 lines) `meld_initial_test.go` (597 lines) `rummy_match.go:268` | `OpClientMeldInitial` in `MeldOrDiscard` (not opened) validates batch 50+ with run via `scoring`, atomically `Racks→TableMelds`, `HasOpened=true`, stays `MeldOrDiscard`; tests success 50pts, invalid atomic, cannot twice `already_opened`, still must discard, public redaction, duplicate tile, joker rep immutability, foreign tile, conservation 106. |
+| **67/14** | `1b666c8` `feat: allow additional melds after opening` | `internal/match/meld_new.go` (158 lines) `meld_new_test.go` (547 lines) `rummy_match.go:276` | `OpClientMeldNew` in `MeldOrDiscard` (opened) validates via `ValidateBatchOwnership` (no score minimum), `meldId` not colliding with existing, atomic, stays `MeldOrDiscard`; tests single/multiple batch, unopened `not_opened`, invalid atomic, duplicate tile, IDs stable, joker, still must discard, wrong phase/notYourTurn. |
+
+*Days 36–67 verified via `make check` and `docker compose build` per day; `Phase 6` milestone (reliable meld validation) and `Phase 7` milestone (50-point opening) complete.*
+
+---
+
+## Current State (after Day 67 / AGENTS Day 14)
+
+- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol`.
+- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
+- **Gameplay implemented:** `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard` loop), `DISCARD` (opening blocked + normal anticlockwise), `DRAW_STOCK`, validated `Run`/`Set` with jokers and Ace edge cases, scoring `5/10/25` with Joker delegation, `MELD_INITIAL` (50+ with run, atomic, `HasOpened`) and `MELD_NEW` (opened, no minimum, atomic, multiple per batch), `TableMeld` stable IDs/joker reps, tile conservation `106`, visibility redaction, standard `OpServerError` with `requestId` correlation.
+- **Tests:** `go test ./...` green; deterministic seeded shuffle; `CheckTileConservation` after every state change; exhaustive redaction (`setup/redaction_test.go` 9 combos) and meld matrix (`rules/meld/matrix_test.go`).
+- **Docs:** `docs/project-baseline.md` (Day 1 + Go §13), `docs/rules-decisions.md` (updated Day 14, `TODO(product)`), `docs/terminology.md` (59 lines), `README.md` (updated Phase 7–8, architecture, protocol, how to add command), `docs/protocol.md`, `docs/state-machine.md`, `docs/testing.md`, `AGENTS.md` source, `docs/daily-log.md` (this file).
+- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
+- **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED` (`pg_isready` `healthcheck` `InitModule` `rummy_backend.so` `console 200` `RPC health`).
+
+## Next (Day 68 / AGENTS Day 15)
+
+Per roadmap **Phase 8 Day 15 — Extend existing public melds**: `EXTEND_MELD` for opened players (own or others’ melds), client submits `targetMeldId` + rack `tileIds` (+ explicit resulting meld if needed), server revalidates entire resulting meld, atomic, `meldIds` stable, joker rep immutable per `docs/rules-decisions.md:3`. Then Days 16–19: discard pickups, joker replacement, round completion.
+
+---
+
+*Generated from `git log --oneline --reverse` `36c2c59..1b666c8` (67 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*

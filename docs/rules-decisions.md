@@ -2,7 +2,7 @@
 
 **Source:** Romanian Tile Rummy as documented by Pagat (`https://www.pagat.com/rummy/romtile.html`) — authoritative baseline per `AGENTS.md:3`.
 **Scope:** Server-authoritative 2–4 players, Nakama Go runtime (`go 1.23.5`), Docker local dev. Remi Online is inspiration only for social table experience — no branding/assets copied.
-**Status:** Day 8 — Phase 2 Rules source documentation. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
+**Status:** Day 14 — Phase 7–8 Meld and table play. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
 
 ---
 
@@ -178,12 +178,21 @@ These opcodes will not be accepted; added only after baseline round is playable 
 
 ---
 
-## 9. Next Artefacts
+## 9. Implemented Table Play (Days 13–14)
+
+**Day 13 `MELD_INITIAL` (commit `de0d727`):** `handleMeldInitial` in `internal/match/meld_initial.go:41` parses `{melds:[{id,kind,tileIds,jokerReps}]}` where `tileIds` are rack-owned `TileInstanceId`s and `jokerReps` maps `jokerId->{colour,rank}`. Validates via `scoring.ValidateInitialBatch` (each meld `ValidateRun/Set`, all tiles owned, no duplicate `TileId` across batch, `HasOpened==false` Else `already_opened`, `TurnPhase==MeldOrDiscard`, `GamePhase==Playing`, `CurrentSeat` is sender). Requires `total>=50` and `>=1` valid `run`; 49 rejected, 50 accepted; tests cover `TestMeldInitialSuccess`, `InvalidLeavesStateUnchanged`, `CannotTwice`, `StillMustDiscard`, `WithJoker` (rep immutability), `DuplicateTile` atomic rollback, conservation `106`, and public redaction.
+
+**Day 14 `MELD_NEW` (commit `1b666c8`):** `handleMeldNew` in `internal/match/meld_new.go:20` reuses same payload shape but requires `HasOpened==true` Else `not_opened`. Validates via `scoring.ValidateBatchOwnership` (each meld valid, ownership, no duplicate) plus `meldId` not colliding with existing `TableMelds` and `real>=2*joker` already in `ValidateRun/Set`. No score minimum; allows multiple melds per batch; atomic; stays `MeldOrDiscard` for required `DISCARD`. Tests: `SuccessSingle`, `MultipleInOneBatch`, `UnopenedRejected`, `InvalidAtomic`, `DuplicateTileRejected`, `MeldIDsStableAndNoCollision`, `StillMustDiscard`, `WithJoker`, `RejectsWrongPhaseAndNotYourTurn`.
+
+Both handlers treat `tileIds` as opaque IDs server resolves to `TileInstance{Colour,Rank,IsJoker}` via `Racks[seat]` — never trusts client face values. `TableMeld.ID` is stable; `JokerReps` are immutable unless `REPLACE_JOKER`.
+
+## 10. Next Artefacts
 
 - `Phase 2 Day 9`: Domain terminology doc (`tile, rack, stock, discard row, meld…`).
 - `Phase 2 Day 10`: Go types `TileColour`, `TileRank`, `TileInstanceId`, `Joker`, `Meld`, `RunMeld`, `SetMeld`, `Seat`, `GamePhase`, `TurnPhase` in `internal/rules/tile`.
 - Scoring isolated in `internal/rules/scoring` with table above.
+- Phase 9+: `EXTEND_MELD`, `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER`, `ROUND_COMPLETE`.
 
 ---
 
-*Last updated: 2026-08-25 (Day 8 Phase 2). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*
+*Last updated: 2026-08-26 (Day 14 Phase 7–8). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*

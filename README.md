@@ -2,7 +2,7 @@
 
 Server-authoritative multiplayer Romanian Tile Rummy for 2–4 players, implemented as a Nakama Go runtime plugin. This is the **Go** version — migrated from TypeScript on 2026-08-25 (`55c7f3b`). See `docs/project-baseline.md` §13 for migration rationale.
 
-The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and will be built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 1 — Foundation & local dev**; no gameplay rules beyond skeleton RPCs are implemented yet.
+The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 7–8 — Meld rules and table play**: validated runs/sets with jokers, 50-point opening with scoring, and `MELD_INITIAL`/`MELD_NEW` authoritative table play (see `docs/rules-decisions.md` and `docs/daily-log.md`).
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ curl -s http://127.0.0.1:7350/ | head   # API gateway (empty 200/404 is ok, not 
 | Service | Container | Image / Build | Host port → Container | Purpose |
 |---|---|---|---|---|
 | `postgres` | `rummy_postgres` | `postgres:15-alpine` | `5433 → 5432` | Nakama DB — avoids `tinybot`’s `5432` (see `docs/project-baseline.md:6`). Uses volume `rummy_backend_pgdata`. |
-| `nakama` | `rummy_nakama` | Built `rummy_backend:local` via `Dockerfile` (`nakama-pluginbuilder:3.26.0` → `nakama:3.26.0`) | `7350 → 7350` (HTTP API), `7351 → 7351` (Console), `7349 → 7349` (gRPC) | Authority, runs `main.go:12` `InitModule` → `health`/`version` RPCs. Plugin baked as `/nakama/data/modules/rummy_backend.so`; only `local.yml` is host-mounted. |
+| `nakama` | `rummy_nakama` | Built `rummy_backend:local` via `Dockerfile` (`nakama-pluginbuilder:3.26.0` → `nakama:3.26.0`) | `7350 → 7350` (HTTP API), `7351 → 7351` (Console), `7349 → 7349` (gRPC) | Authority, runs `main.go:12` `InitModule` → `health`/`version` RPCs and `rummy` match handler. Plugin baked as `/nakama/data/modules/rummy_backend.so`; only `local.yml` is host-mounted. |
 
 Compose project name is `rummy_backend` (`compose.yml:1` `name:`) to isolate volumes/networks from `tinybot`.
 
@@ -78,9 +78,13 @@ docker compose exec postgres psql -U postgres -d nakama -c "SELECT * FROM migrat
 
 ```bash
 go vet ./...          # static checks (required before commit)
-go test ./...         # no tests yet — Day 3 skeleton; future days add go test with deterministic seeds
+go test ./...         # deterministic unit + match flow tests with seeded shuffle
 go fmt ./...          # format (use go fmt, not prettier)
 go mod tidy           # sync deps after editing go.mod (keeps go 1.23.5, nakama-common v1.36.0, protobuf v1.36.4)
+make vet              # alias via Makefile
+make test             # alias
+make fmt              # alias
+make check            # vet + fmt-check + test (CI baseline)
 ```
 
 Protobuf is pinned to `v1.36.4` — `v1.36.6` caused `plugin was built with a different version of pragma` crash on `heroiclabs/nakama:3.26.0` (`go1.23.5`). Keep `go 1.23` line in `go.mod` aligned with builder.
@@ -107,19 +111,86 @@ Or use Nakama Console → API Explorer → RPC → `health` with the same `$TOKE
 
 ```
 .
-├── main.go                # Nakama InitModule (Go) — registers health/version RPCs (main.go:22)
+├── main.go                # Nakama InitModule (Go) — registers health/version RPCs + rummy match (main.go:12)
 ├── go.mod / go.sum        # module github.com/gabriel-d0/rummy_backend, nakama-common v1.36.0
 ├── Dockerfile             # multi-stage pluginbuilder:3.26.0 → nakama:3.26.0, outputs backend.so
 ├── compose.yml            # name rummy_backend, postgres 5433 + nakama 7350/7351, builds Dockerfile
 ├── nakama/data/local.yml  # minimal DEBUG config, mounted ro
 ├── .env.example           # non-secret local defaults (5433, 7350/7351, admin/password)
-├── .gitignore / .dockerignore # Go ignores (*.so, vendor) + annotated legacy Node
-├── docs/project-baseline.md # Day 1 audit + §13 Go migration amendment
-├── docs/                  # future: rules-decisions.md, architecture.md, protocol.md
+├── Makefile               # dev helpers: vet/fmt/test/check + compose shortcuts (make help)
+├── internal/
+│   ├── match/             # authoritative state: RoundState, phases, turn advance, visibility, handlers (discard, draw, meld_initial, meld_new)
+│   ├── rules/
+│   │   ├── tile/          # TileColour, Rank, TileInstance, Joker
+│   │   ├── meld/          # Meld, ValidateRun/Set, joker ratio, Ace edge cases
+│   │   └── scoring/       # ScoreTile/Run/Set, Batch, ValidateInitialBatch/HasRun/Score/Ownership
+│   ├── setup/             # deck 106, seeded Rand, Shuffle, Deal, NewRoundState (15/14/stock)
+│   └── protocol/          # opcodes, envelope, validator, errors (102 OpServerError)
+├── docs/
+│   ├── project-baseline.md
+│   ├── rules-decisions.md # binding product decisions + TODO(product) ambiguities
+│   ├── terminology.md
+│   ├── protocol.md        # opcodes, envelope, payload schemas, snapshots, errors
+│   ├── state-machine.md   # GamePhase/TurnPhase and allowed ops
+│   ├── testing.md         # how to run deterministic tests
+│   └── daily-log.md       # Handmade Hero daily slices (git log companion)
 └── AGENTS.md              # product spec — source of truth, includes 24-day plan
 ```
 
-Future `internal/` layout per `AGENTS.md:133` will be Go packages: `internal/match`, `internal/rules`, `internal/setup`, `internal/protocol` (mirrors previous `src/` plan).
+## Architecture Overview
+
+Small, explicit, server-authoritative. Match handler orchestrates; rules modules are pure.
+
+- **`internal/match`** owns `RoundState` (`Players`, `Racks` private, `Stock`, `DiscardRow` ordered, `TableMelds` public, `CurrentSeat`, `GamePhase`, `TurnPhase`, `Winner`), `AdvanceTurn` anticlockwise `(current+1)%n`, `AllowedOps` matrix, `ValidateActivePlayer`/`ValidatePhaseOp`, visibility projection `PublicView`/`PrivateView`, and handlers `handleOpeningDiscard`, `handleDrawStock`, `handleNormalDiscard`, `handleMeldInitial`, `handleMeldNew`. Never trusts client meld validity.
+- **`internal/rules/meld`** validates `Run` (same colour, consecutive, `1-2-3` and `12-13-1` ok, `13-1-2` rejected, joker reps explicit, `real>=2*joker`) and `Set` (same rank, distinct colours, 3–4 tiles, joker reps) with structured `ValidationError`.
+- **`internal/rules/scoring`** scores tiles in context (`2–9:5`, `10–13:10`, Ace `1-2-3:5` vs `12-13-1:10` vs Ace-set `25`, Joker = represented tile) and validates initial batch (all tiles owned, each meld valid, ≥50, ≥1 run, no duplicate `TileId`, atomic).
+- **`internal/rules/tile`** defines `TileInstance{ID,Colour,Rank,IsJoker}` with unique `TileInstanceId`.
+- **`internal/setup`** creates 106-tile deck (104 numbered +2 jokers), seeded `Shuffle` (Fisher–Yates, injectable `Rand`), `Deal` (opener 15, others 14, remainder `Stock`), `NewRoundState` deterministic for tests, and `CheckTileConservation` invariant.
+- **`internal/protocol`** defines `Version=1`, client `1..9` / server `100..199` opcodes, `Envelope{v,op,requestId,payload}`, `ParseEnvelope`/`ValidatePayload`/`ValidateEnvelope`, and `ErrorResponse` `OpServerError 102` with codes `bad_json`/`bad_version`/`unknown_opcode`/`bad_payload`/`not_member`/`not_your_turn`/`wrong_phase`/`invalid_tile`/`not_opened`/`already_opened`.
+
+Hidden-information invariant: public snapshots expose only `RackCount`/`StockCount`/`DiscardRow`/`TableMelds`; never foreign `Rack` `TileInstanceId`s (verified by `internal/setup/redaction_test.go` exhaustive).
+
+## Protocol Overview
+
+Stable `Version=1`, `OpCode` never reused. Client `1..9`, server `100..199` (`internal/protocol/opcodes.go:1`).
+
+| Dir | Op | Name | Payload | Valid Phase |
+|-----|----|------|---------|-------------|
+| C→S | 1 | `OpClientStart` | `{}` | `Waiting` (host Seat 0, ≥2 players) → `OpeningDiscard` |
+| C→S | 2 | `OpClientDiscard` | `{tileId:"..."}` | `OpeningDiscard` (15→14 blocked) or `Playing/MeldOrDiscard` → advance anticlockwise `MustDraw` |
+| C→S | 3 | `OpClientDrawStock` | `{}` | `Playing/MustDraw` → `MeldOrDiscard` (pop stock top, stock empty → `bad_request` per MVP `docs/rules-decisions.md:6.2`) |
+| C→S | 4 | `OpClientDrawPreviousDiscard` | `{}` | `Playing/MustDraw` (opened, not opening) — *handler pending* |
+| C→S | 5 | `OpClientPickupDiscardForMeld` | `{discardIndex:int, tileIds:[2]}` | `Playing/MustDraw` (opened) — *handler pending* |
+| C→S | 6 | `OpClientMeldInitial` | `{melds:[{id,kind:"run"/"set",tileIds:[3+],jokerReps:{jokerId:{colour,rank}}} ]}` | `Playing/MeldOrDiscard` (not yet opened, ≥50 with run, all tiles owned, each meld valid, no duplicate) → `HasOpened=true`, stays `MeldOrDiscard` |
+| C→S | 7 | `OpClientMeldNew` | same shape | `Playing/MeldOrDiscard` (already opened, each meld valid, no score minimum, atomic, meldId not colliding) → stays `MeldOrDiscard` |
+| C→S | 8 | `OpClientExtendMeld` | `{meldId:"...",tileIds:[1+ ]}` | `Playing/MeldOrDiscard` (opened) — *next* |
+| C→S | 9 | `OpClientReplaceJoker` | `{targetMeldId:"...",tileId:"...",newMeldTiles:[2]}` | `Playing/MeldOrDiscard` (opened) — *deferred* |
+| S→C | 100 | `OpServerState` | `PrivateSnapshot` | match start / reconnect |
+| S→C | 101 | `OpServerStatePublic` | `PublicSnapshot` | broadcast |
+| S→C | 102 | `OpServerError` | `{code, message, details{}, requestId, op}` | on any `sendError` |
+| S→C | 103 | `OpServerEvent` | `{"phase":..., "currentSeat":..., "op":...}` | start/discard/draw/meld |
+
+Envelope: `{"v":1,"op":6,"requestId":"...","payload":{...}}` (`internal/protocol/envelope.go:7`). Errors echo `requestId`/`op`. See `docs/protocol.md` for schemas and `docs/state-machine.md` for phase matrix.
+
+## How to Debug a Match
+
+- **Logs:** `docker compose logs -f nakama | grep -E "Rummy|MatchLoop|Meld|Discard|DrawStock"` — look for `MatchJoin`, `MatchLoop op=`, `Sent error`, `Opening discard`, `MeldInitial/New`.
+- **Console:** `http://127.0.0.1:7351` admin/password → Matches → `rummy` → inspect `State JSON` (public view). Private racks are never in public payload.
+- **Loopback test:** use `go test ./internal/match -run TestMeldInitial -v` / `TestMeldNew` as canonical valid/invalid examples; they drive `RummyMatch.MatchLoop` via `mockDispatcher`/`protocol.MustEnvelope`.
+- **Conservation:** every state-changing test calls `CheckTileConservation(state, allTiles106)` — duplicate/missing/not-in-deck fails.
+- **DB:** `docker compose exec postgres psql -U postgres -d nakama -c "SELECT * FROM migrate"` or `make db-shell`.
+
+## How to Add a New Command Safely
+
+1. Stabilize opcode in `internal/protocol/opcodes.go` (never reuse).
+2. Add payload schema to `ValidatePayload` in `internal/protocol/validator.go` with `bad_payload` details.
+3. Add `AllowedOps` entry in `internal/match/phases.go` for correct `GamePhase`/`TurnPhase`.
+4. Implement pure validation in `internal/rules/*` if meld/scoring logic needed (keep match thin).
+5. Add `handleXxx` in `internal/match/` with phased checks (`ValidateActivePlayer`, `HasOpened`, ownership, `jokerReps`, `meld.New`, `scoring.Validate*`), atomic mutation (validate fully before touching `state`), and `sendError` with `requestId` correlation.
+6. Wire handler in `MatchLoop` (`internal/match/rummy_match.go:268`) after envelope/phase validation.
+7. Add view updates to `visibility.go` if public state changes.
+8. Write tests: success, invalid atomic rollback, `not_opened`/`already_opened`/`not_your_turn`/`wrong_phase`, duplicate tile, joker immutability, conservation, redaction. Use `playingStateForMeldInitial`/`ForMeldNew` helpers as templates.
+9. Run `make check` (`vet`+`fmt-check`+`test`) and `docker compose build`; update `docs/protocol.md` and `docs/state-machine.md` if phase/payload changed.
 
 ## How to Inspect
 
@@ -135,18 +206,29 @@ Future `internal/` layout per `AGENTS.md:133` will be Go packages: `internal/mat
 - **`mkdir /nakama/data/modules: read-only file system`** (legacy TS bug) → fixed by mounting only `local.yml` not whole `data` dir (Go) — see `compose.yml:51`.
 - **Port collision with tinybot** → rummy uses `5433` not `5432`; check `docker ps` and `.env.example`.
 - **Nakama not loading new Go code** → you edited `main.go` but forgot `docker compose up --build -d`; host `go run` does not affect container.
+- **Meld rejected `bad_payload`/`bad_request`** → `docker compose logs nakama | grep "Sent error"` shows `code`/`message`/`op`; valid meld needs `tileIds` owned in rack, `jokerReps` for every joker, `kind run/set`, `real>=2*joker`, for `MELD_INITIAL` also `≥50` and `≥1 run`.
 
 ## Docs & Decisions
 
 - `docs/project-baseline.md` — Day 1 audit + language amendment §13.
+- `docs/rules-decisions.md` — binding Romanian Tile Rummy decisions, MVP simplifications, deferred, and `TODO(product)` ambiguities (updated Day 14).
+- `docs/terminology.md` — shared vocabulary (`TileInstanceId`, `Seat`, `Rack`, `Stock`, `DiscardRow`, `HasOpened`, `GamePhase` etc.).
+- `docs/protocol.md` — opcodes, envelope, payload schemas, snapshots, error codes.
+- `docs/state-machine.md` — `GamePhase`/`TurnPhase` and `AllowedOps` matrix.
+- `docs/testing.md` — deterministic test harness, helpers, conservation and redaction checks.
+- `docs/daily-log.md` — Handmade Hero daily slices (this README is a summary; log is authoritative).
 - `AGENTS.md` — full product spec, tile set, meld rules, increment plan.
-- Next docs (planned): `docs/rules-decisions.md` (50-point opening, jokers), `docs/architecture.md`, `docs/protocol.md`.
 
-## Next Steps (Roadmap Phase 1)
+## Next Steps (Roadmap)
 
-- **Day 4** — Developer scripts: `Makefile` helpers for `go vet/test/fmt` + compose shortcuts.
-- **Day 5** — Local setup docs: expand this `README.md` with architecture overview & protocol stub.
-- **Day 6** — CI: GitHub Actions `go vet` + `docker compose build` smoke.
+After `MELD_INITIAL`/`MELD_NEW` (Days 13–14, commits `de0d727`/`1b666c8`):
+
+- **Day 15** — `EXTEND_MELD` (opened, revalidate whole resulting meld, any owner’s meld).
+- **Day 16** — `DRAW_PREVIOUS_DISCARD` (opened, `MustDraw`, not opening).
+- **Day 17** — `PICKUP_DISCARD_FOR_MELD` (opened, `MustDraw`, exactly 2 rack tiles + selected discard → valid meld, sweep later discards).
+- **Day 18** — `REPLACE_JOKER` (run exact tile / set missing colour, then immediately new meld with 2 rack tiles, atomic).
+- **Day 19** — `ROUND_COMPLETE` win detection and final snapshots.
+- Phase 9–14 polish: visibility hardening, deterministic simulation, developer tooling, refactor.
 
 ---
 

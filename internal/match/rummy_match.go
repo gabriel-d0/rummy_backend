@@ -1,5 +1,5 @@
-// Package match — Rummy authoritative match handler skeleton (Day 22).
-// Minimal registration; full lobby/match logic lands Day 23-31.
+// Package match — Rummy authoritative match handler skeleton (Day 22-23).
+// Day 23: lobby waiting room with seat allocation, join/leave handling.
 package match
 
 import (
@@ -52,10 +52,22 @@ func (m *RummyMatch) MatchInit(ctx context.Context, logger runtime.Logger, db *s
 
 func (m *RummyMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presence runtime.Presence, metadata map[string]string) (interface{}, bool, string) {
 	logger.Info("MatchJoinAttempt user=%s session=%s metadata=%v", presence.GetUserId(), presence.GetSessionId(), metadata)
-	// Allow up to 4 players; real logic will check state.Players length.
-	if st, ok := state.(*RoundState); ok {
-		if len(st.Players) >= 4 {
-			return state, false, "match full"
+	st, ok := state.(*RoundState)
+	if !ok {
+		logger.Error("MatchJoinAttempt bad state type %T", state)
+		return state, false, "bad state"
+	}
+	// Only allow joins in Waiting phase
+	if st.GamePhase != PhaseWaiting {
+		return state, false, "game already started"
+	}
+	if len(st.Players) >= 4 {
+		return state, false, "match full"
+	}
+	// Reject duplicate user
+	for _, p := range st.Players {
+		if string(p.ID) == presence.GetUserId() {
+			return state, false, "already joined"
 		}
 	}
 	return state, true, ""
@@ -63,13 +75,64 @@ func (m *RummyMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger
 
 func (m *RummyMatch) MatchJoin(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presences []runtime.Presence) interface{} {
 	logger.Info("MatchJoin presences=%d", len(presences))
-	// For skeleton we just log; Day 24 will allocate seats via AssignSeats.
-	return state
+	st, ok := state.(*RoundState)
+	if !ok {
+		logger.Error("MatchJoin bad state type %T", state)
+		return state
+	}
+	// Allocate seats deterministically in join order for each presence
+	for _, pres := range presences {
+		pid := PlayerId(pres.GetUserId())
+		// Double-check not already present (defensive)
+		found := false
+		for _, p := range st.Players {
+			if p.ID == pid {
+				found = true
+				break
+			}
+		}
+		if found {
+			continue
+		}
+		seat := Seat(len(st.Players))
+		st.Players = append(st.Players, PlayerState{ID: pid, Seat: seat, HasOpened: false})
+		if st.Racks == nil {
+			st.Racks = map[Seat][]tile.TileInstance{}
+		}
+		st.Racks[seat] = []tile.TileInstance{}
+		logger.Info("Player %s joined as %v (total %d)", pid, seat, len(st.Players))
+	}
+	// Update label with player count for match listing (e.g. "rummy:2")
+	if nk != nil && dispatcher != nil {
+		_ = dispatcher.MatchLabelUpdate(st.GamePhase.String() + ":" + string(rune('0'+len(st.Players))))
+	}
+	return st
 }
 
 func (m *RummyMatch) MatchLeave(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, presences []runtime.Presence) interface{} {
 	logger.Info("MatchLeave presences=%d", len(presences))
-	return state
+	st, ok := state.(*RoundState)
+	if !ok {
+		logger.Error("MatchLeave bad state type %T", state)
+		return state
+	}
+	// Remove leaving players; keep seat numbers stable for MVP (no re-shuffle)
+	// This keeps Racks entries but removes Player; Day 24 will handle dealer rotation.
+	for _, pres := range presences {
+		pid := PlayerId(pres.GetUserId())
+		newPlayers := make([]PlayerState, 0, len(st.Players))
+		for _, p := range st.Players {
+			if p.ID != pid {
+				newPlayers = append(newPlayers, p)
+			} else {
+				logger.Info("Player %s (seat %v) left", pid, p.Seat)
+				delete(st.Racks, p.Seat)
+			}
+		}
+		st.Players = newPlayers
+	}
+	// If no players left, Nakama will terminate via MatchTerminate after grace
+	return st
 }
 
 func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, messages []runtime.MatchData) interface{} {

@@ -265,6 +265,14 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			continue
 		}
 
+		// Initial meld: Playing MeldOrDiscard → validates 50+ with run, marks HasOpened, stays MeldOrDiscard
+		if op == protocol.OpClientMeldInitial {
+			if err := handleMeldInitial(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {
+				continue
+			}
+			continue
+		}
+
 		// Other opcodes (draw/meld) will be handled Day 35+; for now just phase validation.
 		// If we reach here, op was allowed by phase but not yet implemented — treat as not implemented
 		sendError(dispatcher, msg, protocol.ErrCodeBadRequest, fmt.Sprintf("op %d not implemented yet", op), requestId, op, logger)

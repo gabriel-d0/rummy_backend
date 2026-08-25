@@ -41,12 +41,28 @@ func newPresence(userId string) *mockPresence {
 	return &mockPresence{userId: userId, sessionId: "sess-" + userId, username: "user-" + userId, node: "node1"}
 }
 
-// mockDispatcher records label updates.
+// mockDispatcher records label updates and snapshot broadcasts for Day 20.
 type mockDispatcher struct {
-	lastLabel string
+	lastLabel     string
+	lastOp        int64
+	lastData      []byte
+	lastPresences []runtime.Presence
+	broadcasts    []struct {
+		Op   int64
+		Data []byte
+		To   []runtime.Presence
+	}
 }
 
 func (m *mockDispatcher) BroadcastMessage(opCode int64, data []byte, presences []runtime.Presence, sender runtime.Presence, reliable bool) error {
+	m.lastOp = opCode
+	m.lastData = append([]byte(nil), data...)
+	m.lastPresences = presences
+	m.broadcasts = append(m.broadcasts, struct {
+		Op   int64
+		Data []byte
+		To   []runtime.Presence
+	}{Op: opCode, Data: append([]byte(nil), data...), To: presences})
 	return nil
 }
 func (m *mockDispatcher) BroadcastMessageDeferred(opCode int64, data []byte, presences []runtime.Presence, sender runtime.Presence, reliable bool) error {
@@ -158,19 +174,32 @@ func TestMatchJoinAndLeave(t *testing.T) {
 	if len(st.Players) != 3 {
 		t.Fatalf("duplicate join created duplicate, len %d", len(st.Players))
 	}
-	// Leave bob
+	// Leave bob — Day 20 reconnection keeps seat and rack for rejoin
 	state = m.MatchLeave(context.Background(), logger, nil, nil, dispatcher, 0, state, []runtime.Presence{newPresence("bob")})
 	st = state.(*RoundState)
-	if len(st.Players) != 2 {
-		t.Fatalf("after leave bob len %d", len(st.Players))
+	if len(st.Players) != 3 {
+		t.Fatalf("after leave bob len %d want 3 (kept for reconnect)", len(st.Players))
 	}
+	foundBob := false
 	for _, p := range st.Players {
 		if p.ID == "bob" {
-			t.Fatalf("bob should be removed")
+			foundBob = true
+			if p.Seat != 1 {
+				t.Fatalf("bob seat %v want 1", p.Seat)
+			}
 		}
 	}
-	if _, ok := st.Racks[1]; ok {
-		t.Fatalf("rack 1 should be deleted after bob leaves")
+	if !foundBob {
+		t.Fatalf("bob should be kept for reconnection")
+	}
+	if _, ok := st.Racks[1]; !ok {
+		t.Fatalf("rack 1 should be kept after bob leaves for reconnect")
+	}
+	// Reconnect bob — should not create duplicate, should receive snapshot (dispatcher records)
+	state = m.MatchJoin(context.Background(), logger, nil, nil, dispatcher, 0, state, []runtime.Presence{newPresence("bob")})
+	st = state.(*RoundState)
+	if len(st.Players) != 3 {
+		t.Fatalf("reconnect should not duplicate, len %d", len(st.Players))
 	}
 }
 

@@ -60,18 +60,22 @@ func (m *RummyMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger
 		logger.Error("MatchJoinAttempt bad state type %T", state)
 		return state, false, "bad state"
 	}
-	// Only allow joins in Waiting phase
+	// Allow reconnection for existing players during Playing (or RoundComplete) — they keep their seat
+	for _, p := range st.Players {
+		if string(p.ID) == presence.GetUserId() {
+			if st.GamePhase == PhaseWaiting {
+				return state, false, "already joined"
+			}
+			logger.Info("Reconnection attempt for %s seat %v in phase %v", p.ID, p.Seat, st.GamePhase)
+			return state, true, ""
+		}
+	}
+	// Only allow new joins in Waiting phase
 	if st.GamePhase != PhaseWaiting {
 		return state, false, "game already started"
 	}
 	if len(st.Players) >= 4 {
 		return state, false, "match full"
-	}
-	// Reject duplicate user
-	for _, p := range st.Players {
-		if string(p.ID) == presence.GetUserId() {
-			return state, false, "already joined"
-		}
 	}
 	return state, true, ""
 }
@@ -86,7 +90,7 @@ func (m *RummyMatch) MatchJoin(ctx context.Context, logger runtime.Logger, db *s
 	// Allocate seats deterministically in join order for each presence
 	for _, pres := range presences {
 		pid := PlayerId(pres.GetUserId())
-		// Double-check not already present (defensive)
+		// Double-check not already present (defensive) — if already present, treat as reconnection (keep seat, send snapshot)
 		found := false
 		for _, p := range st.Players {
 			if p.ID == pid {
@@ -95,6 +99,13 @@ func (m *RummyMatch) MatchJoin(ctx context.Context, logger runtime.Logger, db *s
 			}
 		}
 		if found {
+			seat := SeatOfPlayer(st.Players, pid)
+			logger.Info("Player %s reconnected as %v", pid, seat)
+			if dispatcher != nil {
+				snap := PrivateView(st, seat)
+				b, _ := json.Marshal(snap)
+				_ = dispatcher.BroadcastMessage(protocol.OpServerState, b, []runtime.Presence{pres}, nil, true)
+			}
 			continue
 		}
 		seat := Seat(len(st.Players))
@@ -104,6 +115,11 @@ func (m *RummyMatch) MatchJoin(ctx context.Context, logger runtime.Logger, db *s
 		}
 		st.Racks[seat] = []tile.TileInstance{}
 		logger.Info("Player %s joined as %v (total %d)", pid, seat, len(st.Players))
+		if dispatcher != nil {
+			snap := PrivateView(st, seat)
+			b, _ := json.Marshal(snap)
+			_ = dispatcher.BroadcastMessage(protocol.OpServerState, b, []runtime.Presence{pres}, nil, true)
+		}
 	}
 	// Update label with player count for match listing (e.g. "rummy:2")
 	if nk != nil && dispatcher != nil {
@@ -119,22 +135,18 @@ func (m *RummyMatch) MatchLeave(ctx context.Context, logger runtime.Logger, db *
 		logger.Error("MatchLeave bad state type %T", state)
 		return state
 	}
-	// Remove leaving players; keep seat numbers stable for MVP (no re-shuffle)
-	// This keeps Racks entries but removes Player; Day 24 will handle dealer rotation.
+	// For Day 20 reconnection, keep seat numbers and Racks stable — do not delete.
+	// A disconnected player can rejoin with same Seat and receive PrivateView.
+	// Only log leave; Nakama will terminate via MatchTerminate after grace if all leave.
 	for _, pres := range presences {
 		pid := PlayerId(pres.GetUserId())
-		newPlayers := make([]PlayerState, 0, len(st.Players))
-		for _, p := range st.Players {
-			if p.ID != pid {
-				newPlayers = append(newPlayers, p)
-			} else {
-				logger.Info("Player %s (seat %v) left", pid, p.Seat)
-				delete(st.Racks, p.Seat)
-			}
+		seat := SeatOfPlayer(st.Players, pid)
+		if seat != SeatInvalid {
+			logger.Info("Player %s (seat %v) disconnected (kept for reconnect)", pid, seat)
+		} else {
+			logger.Info("Unknown player %s left (not in match)", pid)
 		}
-		st.Players = newPlayers
 	}
-	// If no players left, Nakama will terminate via MatchTerminate after grace
 	return st
 }
 

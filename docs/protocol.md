@@ -30,12 +30,12 @@ Helpers: `NewEnvelope(op,payload)` and `NewEnvelopeWithRequestId` for tests/clie
 | 1 | `OpClientStart` | `{}` or `{"extra":...}` allowed (empty) | `Waiting` only, host Seat 0, 2–4 players → `OpeningDiscard`. Also `MatchSignal "start"` for local dev. |
 | 2 | `OpClientDiscard` | `{"tileId":"<TileInstanceId>"}` required non-empty | `OpeningDiscard` (15→14 blocked, `Index 0`) or `Playing/MeldOrDiscard` (append, `IsOpeningDiscard false`, advance `(current+1)%n` → `MustDraw`). |
 | 3 | `OpClientDrawStock` | `{}` (empty) | `Playing/MustDraw` only; pops `Stock` top (last element) to `Racks[current]`; `TurnPhase→MeldOrDiscard`; `stock empty` → `bad_request` per `docs/rules-decisions.md:6.2`. |
-| 4 | `OpClientDrawPreviousDiscard` | `{}` | `Playing/MustDraw` (opened, not opening) — *implemented `CanPickupPreviousDiscard` but handler pending*. |
-| 5 | `OpClientPickupDiscardForMeld` | `{"discardIndex":int>=0, "tileIds":["...","..."]}` exactly 2 | `Playing/MustDraw` (opened) — *handler pending*. `discardIndex` must not be opening, `tileIds` owned. |
-| 6 | `OpClientMeldInitial` | `{"melds":[{"id":"m1","kind":"run"\|"set","tileIds":["t1","t2","t3"], "jokerReps":{"jokerId":{"colour":"red","rank":7}}} , ...]}` ≥1 meld | `Playing/MeldOrDiscard`, `HasOpened==false`, each meld 3+ tiles owned, each `ValidateRun/Set` passes, total `>=50` with ≥1 run, no duplicate `TileId` across batch, `meldId` unique in batch. Atomically `Racks→TableMelds` and `HasOpened=true`; stays `MeldOrDiscard`. |
-| 7 | `OpClientMeldNew` | same shape as 6 | `Playing/MeldOrDiscard`, `HasOpened==true`, each meld valid, ownership, no duplicate, `meldId` not colliding with existing `TableMelds`; no score minimum; atomic; supports multiple melds per batch. |
-| 8 | `OpClientExtendMeld` | `{"meldId":"...","tileIds":["..."]}` ≥1 | `Playing/MeldOrDiscard` (opened) — next: revalidate entire resulting meld, any owner’s meld. |
-| 9 | `OpClientReplaceJoker` | `{"targetMeldId":"...","tileId":"...","newMeldTiles":["...","..."]}` exactly 2 | `Playing/MeldOrDiscard` (opened) — deferred; run exact tile or set missing colour, then new meld with 2 rack tiles. |
+| 4 | `OpClientDrawPreviousDiscard` | `{}` | `Playing/MustDraw` (opened, `HasOpened`, not opening `IsOpeningDiscard`, latest only) → `MeldOrDiscard` (discard tail → `Racks[seat]`, `DiscardRow` pop). |
+| 5 | `OpClientPickupDiscardForMeld` | `{"discardIndex":int>=0, "tileIds":["...","..."], "jokerReps":{"jokerId":{"colour":"red","rank":7}}, "kind":"run"\|"set"}` exactly 2 | `Playing/MustDraw` (opened, `HasOpened`, non-opening `discardIndex` + exactly 2 `tileIds` owned → valid 3-tile `meld.New` with that discard; `jokerReps` for any joker among the three; `kind` optional or inferred `run`→`set`). Atomically `Racks = rack -2 + laterTiles` (`laterTiles = DiscardRow[discardIndex+1:]` swept in order), `DiscardRow = DiscardRow[:discardIndex]` reindexed, `TableMelds += newMeld` (`Kind` `run`/`set`), `TurnPhase→MeldOrDiscard` or `RoundComplete` if win. |
+| 6 | `OpClientMeldInitial` | `{"melds":[{"id":"m1","kind":"run"\|"set","tileIds":["t1","t2","t3"], "jokerReps":{"jokerId":{"colour":"red","rank":7}}} , ...]}` ≥1 meld | `Playing/MeldOrDiscard`, `HasOpened==false`, each meld 3+ tiles owned, each `ValidateRun/Set` passes, total `>=50` with ≥1 run, no duplicate `TileId` across batch, `meldId` unique in batch. Atomically `Racks→TableMelds` and `HasOpened=true`; stays `MeldOrDiscard` or `RoundComplete` if `rack==0`. |
+| 7 | `OpClientMeldNew` | same shape as 6 | `Playing/MeldOrDiscard`, `HasOpened==true`, each meld valid, ownership, no duplicate, `meldId` not colliding with existing `TableMelds`; no score minimum; atomic; supports multiple melds per batch; or `RoundComplete`. |
+| 8 | `OpClientExtendMeld` | `{"meldId":"...","tileIds":["..."], "jokerReps":{"jokerId":{"colour":"red","rank":7}}}` ≥1 | `Playing/MeldOrDiscard` (opened, `HasOpened`, revalidates entire resulting meld `meld.New` + `ValidateRun/Set`, preserves `JokerReps` immutability, any owner (`OwnerSeat` kept), atomic `Racks→TableMeld`) → stays `MeldOrDiscard` or `RoundComplete`. |
+| 9 | `OpClientReplaceJoker` | `{"targetMeldId":"...","tileId":"...","newMeldTiles":["...","..."], "jokerReps":{"jokerId":{"colour":"red","rank":7}}, "newMeldKind":"run"\|"set"}` exactly 2 | `Playing/MeldOrDiscard` (opened, `HasOpened`, exact tile for run or exact missing colour for set per `docs/rules-decisions.md:6.4` MVP, `tileId` owned real tile equals some joker’s `JokerReps` colour/rank, `newMeldTiles[2]` owned distinct real tiles; `jokerReps` must contain recovered joker’s new `colour`/`rank`; tries `run`→`set` or forced `newMeldKind`, validates both `updatedMeld` and `newMeld` via `meld.New`; atomically `Racks = rack -3` (`tileId`+2), `TableMelds[targetIdx]=updated` (joker→real, `JokerReps` without that joker) + `+=newMeld` (`Kind` stable), stays `MeldOrDiscard` or `RoundComplete`) |
 
 `ValidatePayload` (`internal/protocol/validator.go:12`) enforces these schemas with `bad_payload` including field name. Unknown opcode or bad version never reaches `MatchLoop` payload handling — `ParseEnvelope` rejects before.
 
@@ -43,12 +43,12 @@ Helpers: `NewEnvelope(op,payload)` and `NewEnvelopeWithRequestId` for tests/clie
 
 | Op | Name | Payload | When |
 |---|---|---|---|
-| 100 | `OpServerState` | `PrivateSnapshot` (see below) | match start / reconnect (per-player) |
-| 101 | `OpServerStatePublic` | `PublicSnapshot` | broadcast (if used) |
-| 102 | `OpServerError` | `ErrorResponse{code,message,details,requestId,op}` JSON | on any rejection |
-| 103 | `OpServerEvent` | `{"phase":...,"currentSeat":...,"op":...,"melds":...}` JSON | `started`, `discard`, `drawStock`, `meldInitial`, `meldNew` |
+| 100 | `OpServerState` | `PrivateSnapshot` JSON (see below, `v:1` versioned, stable) | `MatchJoin` (initial join and **reconnect**: `rummy_match.go:79` sends `PrivateView(state, seat)` via `dispatcher.BroadcastMessage(OpServerState, json.Marshal(PrivateSnapshot), [presence], true)` to that presence only; others never receive foreign `OwnRack` — verified `snapshot_hardening_test.go:42` `TestReconnectionRestoresPrivateRack`) and `win.go:12` `checkWinAndComplete` final snapshot |
+| 101 | `OpServerStatePublic` | `PublicSnapshot` | broadcast (if used, e.g., win `win.go:12` broadcasts `101` `RoundComplete` `Winner`) |
+| 102 | `OpServerError` | `ErrorResponse{code,message,details,requestId,op}` JSON | on any rejection (`sendError` `rummy_match.go:494` to `[sender]` only, echoes `requestId`/`op`) |
+| 103 | `OpServerEvent` | `{"phase":...,"currentSeat":...,"op":...,"melds":...,"winner":...}` JSON | `started`, `discard`, `drawStock`, `drawPreviousDiscard`, `pickupDiscardForMeld`, `meldInitial`, `meldNew`, `extendMeld`, `replaceJoker`, `roundComplete` (`win.go:12` `roundComplete`) |
 
-Current implementation broadcasts `OpServerEvent` JSON strings (e.g., `{"op":"meldInitial","seat":0,"melds":3}`) plus `OpServerError` to sender only via `dispatcher.BroadcastMessage` with `presences=[sender]` (`internal/match/rummy_match.go:448`).
+Current implementation broadcasts `OpServerEvent` JSON strings (e.g., `{"op":"meldInitial","seat":0,"melds":3}`, `{"op":"drawPreviousDiscard","seat":0,"tileId":"..."}`, `{"op":"roundComplete","winner":0}`) plus `OpServerError` to sender only via `dispatcher.BroadcastMessage` with `presences=[sender]` (`internal/match/rummy_match.go:494`) and `OpServerState` snapshots on join/reconnect/win.
 
 ## Error Protocol
 
@@ -104,7 +104,7 @@ Stable codes (`errors.go:53`):
 - `TableMelds` public with stable `ID` and explicit `JokerReps` (colour+rank, never joker).
 - `Winner` is `SeatInvalid (-1)` until `RoundComplete`.
 
-`PrivateSnapshot` (`visibility.go:30`) is `PublicSnapshot` plus `ownRack []TileInstance` and `ownSeat`. Server sends `PrivateView(state, seat)` per player; never sends foreign racks (verified by `internal/setup/redaction_test.go` exhaustive: `n=2,3,4 × seeds 42,7,123` and `internal/match/visibility_test.go`).
+`PrivateSnapshot` (`visibility.go:30`) is `PublicSnapshot` plus `ownRack []TileInstance` and `ownSeat` (`v:1` versioned, stable `json.Marshal` deterministic `TestSnapshotVersioning`). Server sends `PrivateView(state, seat)` per player on `MatchJoin` and on reconnection (`rummy_match.go:79` keeps `Players`/`Racks` on `MatchLeave` and re-sends `PrivateSnapshot` to that `Seat` only); never sends foreign racks (verified by `internal/setup/redaction_test.go` exhaustive: `n=2,3,4 × seeds 42,7,123` and `internal/match/visibility_test.go` and `snapshot_hardening_test.go:42` `TestRedactionRoundComplete` which also verifies `RoundComplete` `Winner` public `winner` while `PublicView` still redacts `bob-secret` and `PrivateView` for winner empty `OwnRack`). `PublicSnapshot`/`PrivateSnapshot` both carry `v:1` and `winner` (`SeatInvalid -1` until `RoundComplete`).
 
 ## Adding a New Opcode
 

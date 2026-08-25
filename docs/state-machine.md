@@ -62,18 +62,27 @@ Playing/MustDraw --[stock empty and no discard pickup legal]--> RoundComplete (d
 
 ## MatchLoop Dispatch (`rummy_match.go:141`)
 
-`MatchLoop` loops `messages []MatchData`: `ValidateEnvelope` → `ValidateActivePlayer` → `ValidatePhaseOp` → `ValidatePayload` (all with `requestId` correlation, `sendError` to sender only) → handle `Start`, `OpeningDiscard`, `NormalDiscard`, `DrawStock`, `MeldInitial`, `MeldNew`, else `not implemented`. Future handlers follow same pattern.
+`MatchLoop` loops `messages []MatchData`: `ValidateEnvelope` → `ValidateActivePlayer` (not enforced in `Waiting`/`RoundComplete`, allows reconnection) → `ValidatePhaseOp` → `ValidatePayload` (all with `requestId` correlation, `sendError` to sender only) → handle `Start`, `OpeningDiscard`, `NormalDiscard`, `DrawStock`, `DrawPreviousDiscard` (`4`), `PickupDiscardForMeld` (`5`), `MeldInitial` (`6`), `MeldNew` (`7`), `ExtendMeld` (`8`), `ReplaceJoker` (`9`), win check via `win.go:12` `checkWinAndComplete` after any `rack==0` (discard or meld), else `not implemented`.
+
+## Reconnection and Snapshots (Day 20)
+
+- `MatchJoinAttempt` (`rummy_match.go:56`) allows existing `PlayerId` to rejoin in any phase (`Waiting` returns `already joined`, `Playing`/`RoundComplete` returns success for same `Seat`).
+- `MatchJoin` (`rummy_match.go:79`) keeps `Players`/`Racks` on `MatchLeave` (Day 20) for reconnect; on rejoin (already in `Players`) it does not allocate new `Seat` and sends `PrivateView(state, seat)` via `dispatcher.BroadcastMessage(OpServerState 100, json.Marshal(PrivateSnapshot), [presence], true)` to that presence only — other players never receive foreign `OwnRack` (verified by `snapshot_hardening_test.go:42` `TestReconnectionRestoresPrivateRack`).
+- `MatchLeave` (`rummy_match.go:115`) logs `disconnected (kept for reconnect)` and does not delete `Racks[seat]`; Nakama terminates after grace if all leave.
+- Snapshots are versioned `PublicSnapshot.Version=1` (`visibility.go:48`) and stable (`json.Marshal` deterministic, tested `TestSnapshotVersioning`).
+- Client sync expectation: on join or rejoin, client receives `OpServerState 100` `PrivateSnapshot` (public + `OwnRack` + `OwnSeat` + `Winner`); public state also broadcast via `OpServerStatePublic 101` if needed. Client must not trust local rack after disconnect — rehydrate from snapshot. See `docs/protocol.md` and `docs/testing.md`.
 
 ## Diagram (text)
 
 ```
 Waiting ─1─► OpeningDiscard ─2─► Playing/MustDraw ─3/4/5─► Playing/MeldOrDiscard ─2─► Playing/MustDraw ─► ...
                                │                          ▲ 6/7/8/9 (stay)
-                               │                          └─2 (empty rack → RoundComplete)
+                               │                          └─2 or 6/7/8/9/5(empty rack → RoundComplete via win.go:12)
+                               │                          └─reconnect: MatchJoin sends PrivateView to that Seat only
 ```
 
-See `docs/rules-decisions.md:5` for turn flow narrative and `docs/protocol.md` for payload schemas per transition.
+See `docs/rules-decisions.md:5` for turn flow narrative and `docs/protocol.md` for payload schemas per transition. See `docs/architecture.md` for visibility centralization.
 
 ---
 
-*Code: `internal/match/state.go:12`, `phases.go:15`, `turn.go:9`, `validate.go:13`, `rummy_match.go:141`, `discard.go:9`.*
+*Code: `internal/match/state.go:12`, `phases.go:15`, `turn.go:9`, `validate.go:13`, `rummy_match.go:56`/`79`/`115`/`141`, `visibility.go:36`, `win.go:12`, `discard.go:9`.*

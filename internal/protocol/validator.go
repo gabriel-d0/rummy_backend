@@ -144,6 +144,11 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 			TargetMeldId *string  `json:"targetMeldId"`
 			TileId       *string  `json:"tileId"`
 			NewMeldTiles []string `json:"newMeldTiles"`
+			JokerReps    map[string]struct {
+				Colour string `json:"colour"`
+				Rank   int    `json:"rank"`
+			} `json:"jokerReps,omitempty"`
+			NewMeldKind *string `json:"newMeldKind,omitempty"`
 		}
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("replace payload bad JSON: %v", err)}
@@ -156,6 +161,25 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 		}
 		if len(p.NewMeldTiles) != 2 {
 			return &ParseError{Code: "bad_payload", Message: "replace.newMeldTiles must have exactly 2"}
+		}
+		for i, id := range p.NewMeldTiles {
+			if id == "" {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("replace.newMeldTiles[%d] empty", i)}
+			}
+		}
+		if p.NewMeldKind != nil && *p.NewMeldKind != "" && *p.NewMeldKind != "run" && *p.NewMeldKind != "set" {
+			return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("replace.newMeldKind must be run or set, got %q", *p.NewMeldKind)}
+		}
+		for jid, rep := range p.JokerReps {
+			if jid == "" {
+				return &ParseError{Code: "bad_payload", Message: "replace.jokerReps key empty"}
+			}
+			if rep.Colour == "" {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("replace.jokerReps[%q] colour required", jid)}
+			}
+			if rep.Rank < 1 || rep.Rank > 13 {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("replace.jokerReps[%q] rank must be 1..13", jid)}
+			}
 		}
 		return nil
 

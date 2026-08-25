@@ -57,6 +57,11 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 		var p struct {
 			DiscardIndex *int     `json:"discardIndex"`
 			TileIds      []string `json:"tileIds"`
+			JokerReps    map[string]struct {
+				Colour string `json:"colour"`
+				Rank   int    `json:"rank"`
+			} `json:"jokerReps,omitempty"`
+			Kind *string `json:"kind,omitempty"` // optional "run" or "set", if omitted server tries both
 		}
 		if err := json.Unmarshal(payload, &p); err != nil {
 			return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("pickup payload bad JSON: %v", err)}
@@ -73,6 +78,20 @@ func ValidatePayload(op int64, payload json.RawMessage) error {
 		for i, id := range p.TileIds {
 			if id == "" {
 				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("pickup.tileIds[%d] empty", i)}
+			}
+		}
+		if p.Kind != nil && *p.Kind != "" && *p.Kind != "run" && *p.Kind != "set" {
+			return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("pickup.kind must be run or set, got %q", *p.Kind)}
+		}
+		for jid, rep := range p.JokerReps {
+			if jid == "" {
+				return &ParseError{Code: "bad_payload", Message: "pickup.jokerReps key empty"}
+			}
+			if rep.Colour == "" {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("pickup.jokerReps[%q] colour required", jid)}
+			}
+			if rep.Rank < 1 || rep.Rank > 13 {
+				return &ParseError{Code: "bad_payload", Message: fmt.Sprintf("pickup.jokerReps[%q] rank must be 1..13", jid)}
 			}
 		}
 		return nil

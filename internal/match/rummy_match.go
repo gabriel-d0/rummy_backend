@@ -273,6 +273,14 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			continue
 		}
 
+		// Pickup discard for meld: MustDraw, opened, non-opening discard + 2 rack tiles → valid meld + sweep later
+		if op == protocol.OpClientPickupDiscardForMeld {
+			if err := handlePickupDiscardForMeld(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {
+				continue
+			}
+			continue
+		}
+
 		// Initial meld: Playing MeldOrDiscard → validates 50+ with run, marks HasOpened, stays MeldOrDiscard
 		if op == protocol.OpClientMeldInitial {
 			if err := handleMeldInitial(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {

@@ -5,6 +5,7 @@ package match
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/gabriel-d0/rummy_backend/internal/protocol"
@@ -236,10 +237,91 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			if dispatcher != nil {
 				_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(`{"phase":"OpeningDiscard","currentSeat":0}`), nil, nil, true)
 			}
+			continue
 		}
-		// Other opcodes (discard/draw/meld) will be handled Day 35+; for now just phase validation.
+
+		// Opening discard: must be from Seat 0 with 15 tiles, becomes blocked tile.
+		if op == protocol.OpClientDiscard && st.GamePhase == PhaseOpeningDiscard {
+			if err := handleOpeningDiscard(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {
+				// handleOpeningDiscard already sent error
+				continue
+			}
+			continue
+		}
+
+		// Other opcodes (draw/meld) will be handled Day 35+; for now just phase validation.
+		// If we reach here, op was allowed by phase but not yet implemented — treat as not implemented
+		sendError(dispatcher, msg, protocol.ErrCodeBadRequest, fmt.Sprintf("op %d not implemented yet", op), requestId, op, logger)
 	}
 	return st
+}
+
+// handleOpeningDiscard validates and applies the opening discard. It sends OpServerError on failure and returns error.
+func handleOpeningDiscard(st *RoundState, senderId PlayerId, payload []byte, requestId string, op int64, dispatcher runtime.MatchDispatcher, sender runtime.Presence, logger runtime.Logger) error {
+	seat := SeatOfPlayer(st.Players, senderId)
+	if seat != 0 {
+		sendError(dispatcher, sender, protocol.ErrCodeNotYourTurn, "only opening player may discard", requestId, op, logger)
+		return fmt.Errorf("not opening player")
+	}
+	if len(st.Players) < 2 {
+		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, "need 2 players", requestId, op, logger)
+		return fmt.Errorf("not enough players")
+	}
+	if len(st.DiscardRow) != 0 {
+		sendError(dispatcher, sender, protocol.ErrCodeWrongPhase, "opening discard already done", requestId, op, logger)
+		return fmt.Errorf("already discarded")
+	}
+	// Parse payload {tileId}
+	var p struct {
+		TileId string `json:"tileId"`
+	}
+	if err := json.Unmarshal(payload, &p); err != nil {
+		sendError(dispatcher, sender, protocol.ErrCodeBadPayload, "payload must be {tileId}", requestId, op, logger)
+		return err
+	}
+	tileId := tile.TileInstanceId(p.TileId)
+	if tileId == "" {
+		sendError(dispatcher, sender, protocol.ErrCodeBadPayload, "tileId required", requestId, op, logger)
+		return fmt.Errorf("tileId empty")
+	}
+	// Find tile in sender's rack (must have 15)
+	rack := st.Racks[seat]
+	if len(rack) != 15 {
+		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, fmt.Sprintf("opening rack must have 15, has %d", len(rack)), requestId, op, logger)
+		return fmt.Errorf("rack size")
+	}
+	idx := -1
+	var tileToDiscard tile.TileInstance
+	for i, t := range rack {
+		if t.ID == tileId {
+			idx = i
+			tileToDiscard = t
+			break
+		}
+	}
+	if idx == -1 {
+		sendError(dispatcher, sender, protocol.ErrCodeInvalidTile, "tile not in rack", requestId, op, logger)
+		return fmt.Errorf("tile not in rack")
+	}
+	// Remove from rack (preserve order)
+	newRack := make([]tile.TileInstance, 0, 14)
+	newRack = append(newRack, rack[:idx]...)
+	newRack = append(newRack, rack[idx+1:]...)
+	st.Racks[seat] = newRack
+	// Append to discard row as opening discard
+	entry := DiscardEntry{Tile: tileToDiscard, IsOpeningDiscard: true, Index: 0}
+	st.DiscardRow = append(st.DiscardRow, entry)
+	// Advance to next seat and go to Playing MustDraw
+	n := len(st.Players)
+	next, _ := NextSeat(seat, n)
+	st.CurrentSeat = next
+	st.GamePhase = PhasePlaying
+	st.TurnPhase = TurnMustDraw
+	logger.Info("Opening discard %v by %s, now current %v phase Playing", tileId, senderId, next)
+	if dispatcher != nil {
+		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"phase":"Playing","currentSeat":%d,"discard":"%s","isOpening":true}`, int(next), tileId)), nil, nil, true)
+	}
+	return nil
 }
 
 // sendError sends OpServerError to the sender only (not broadcast) with requestId correlation.

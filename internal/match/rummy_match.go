@@ -312,11 +312,14 @@ func handleOpeningDiscard(st *RoundState, senderId PlayerId, payload []byte, req
 	entry := DiscardEntry{Tile: tileToDiscard, IsOpeningDiscard: true, Index: 0}
 	st.DiscardRow = append(st.DiscardRow, entry)
 	// Advance to next seat and go to Playing MustDraw
-	n := len(st.Players)
-	next, _ := NextSeat(seat, n)
-	st.CurrentSeat = next
 	st.GamePhase = PhasePlaying
-	st.TurnPhase = TurnMustDraw
+	// CurrentSeat is still opening seat (0); AdvanceTurn moves to next anticlockwise
+	if err := AdvanceTurn(st); err != nil {
+		// Should not happen — opening seat was validated
+		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, err.Error(), requestId, op, logger)
+		return err
+	}
+	next := st.CurrentSeat
 	logger.Info("Opening discard %v by %s, now current %v phase Playing", tileId, senderId, next)
 	if dispatcher != nil {
 		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"phase":"Playing","currentSeat":%d,"discard":"%s","isOpening":true}`, int(next), tileId)), nil, nil, true)

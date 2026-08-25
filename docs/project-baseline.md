@@ -1,12 +1,14 @@
 # Project Baseline — Phase 1 Day 1 Audit
 
-**Date:** 2026-08-25  
+**Date:** 2026-08-25 (amended 2026-08-25 — Go migration, see §13)  
 **Phase / Day:** Phase 1 — Day 1: Repository and environment audit  
 **Author:** Lead gameplay/server engineer  
 **Branch:** `main` (no commits yet at audit start)  
 **Repo:** `git@github.com:gabriel-d0/rummy_backend.git`
 
 This document records the factual starting state of the repository as required by `AGENTS.md:226` (Day 1 — Repository, Nakama, Docker, and developer baseline), expanded to the granular roadmap Phase 1 Day 1 deliverable: *Review existing project, language, tooling, branching, CI, and deployment assumptions. Record findings in `docs/project-baseline.md`.*
+
+> **Amendment 2026-08-25 — Language migrated TypeScript → Go:** After Day 3 the project was rewritten from TypeScript to Go per explicit user request (`refactor: migrate Nakama runtime from TypeScript to Go` `55c7f3b`). `AGENTS.md:124` originally mandated TypeScript; this document now records Go as the authoritative runtime language (see §9 and new §13). All future `internal/*` packages, `main.go`, `Dockerfile` plugin build, and `go test`/`go vet` replace the previous `src/main.ts`/`tsconfig` path. Historical TS decisions remain for audit trail.
 
 ---
 
@@ -50,9 +52,11 @@ drwxr-xr-x@  2 gabriel  staff    64 Aug 25 16:23 docs
 
 > TypeScript for Nakama runtime code unless the repository already has a clearly established supported language; if another language is already configured, preserve that choice and explain it.
 
-**Finding:** No language is established. No `package.json`, `tsconfig.json`, `go.mod`, `Dockerfile`, `nakama/` dir, `Makefile`, or runtime config exists. Therefore **TypeScript is the selected language** for all Nakama runtime work going forward. This decision is recorded as the Day 1 language choice.
+**Finding (2026-08-25 audit):** No language is established. No `package.json`, `tsconfig.json`, `go.mod`, `Dockerfile`, `nakama/` dir, `Makefile`, or runtime config exists. Therefore **TypeScript is the selected language** for all Nakama runtime work going forward. This decision is recorded as the Day 1 language choice.
 
 For tests, `AGENTS.md:127` requires a test runner appropriate for the language. For TypeScript the expected runner is **Jest or Vitest** (to be decided Day 3/4 when `package.json` is introduced). No runner exists yet.
+
+**Finding (amended 2026-08-25):** User requested migration to Go and Day 3 was rewritten (`55c7f3b`). **Go is now the authoritative runtime language** (`go 1.23.5`, `nakama-common v1.36.0`, `main.go` with `InitModule` at `main.go:22`). The test runner is `go test`/`go vet`; formatting is `gofmt`/`go fmt`. Historical TS decision kept above for traceability — see §13.
 
 ### 2.2 Local toolchain (probed 2026-08-25, `darwin 25.6.0 arm64`)
 
@@ -67,7 +71,7 @@ For tests, `AGENTS.md:127` requires a test runner appropriate for the language. 
 | **Docker daemon** | Running via Docker Desktop (`desktop-linux` context, socket `unix:///Users/gabriel/.docker/run/docker.sock` → `/var/run/docker.sock`) | ✅ Verified with `docker ps` showing live containers `tinybot-api` + `tinybot-db`. | Confirms local Docker workflow is operational. |
 | **psql** | Not found (`which psql` → empty) | ⚠️ Not installed locally. Not blocking — Postgres will run in Docker. For debugging, `docker compose exec` or `docker exec` will be used. Could `brew install libpq` / `postgresql@15` later for convenience. | |
 | **Git** | System git (via Xcode CLT), `main` unborn | ✅ | |
-| **Formatting / lint / type-check** | None configured (no `prettier`, `eslint`, `tsconfig.json`) | ❌ Gap to close Day 2–4 | `AGENTS.md:242,333` expects `format / lint / typecheck / test` scripts. |
+| **Formatting / lint / type-check** | None configured (no `prettier`, `eslint`, `tsconfig.json`) | ❌ Gap to close Day 2–4 | `AGENTS.md:242,333` expects `format / lint / typecheck / test` scripts. **Amended 2026-08-25:** For Go, use `gofmt`/`go fmt`, `go vet ./...`, `go test ./...` (see `README.md` Dev commands). |
 | **CI** | None (no `.github/workflows/`) | ❌ | Roadmap Day 6. |
 
 ### 2.3 Implicit assumptions confirmed
@@ -166,8 +170,8 @@ For tests, `AGENTS.md:127` requires a test runner appropriate for the language. 
 
 ## 9. Decisions Made This Day
 
-1. **Language: TypeScript** — per `AGENTS.md:125`, no existing language, so TS is authoritative for Nakama JS runtime modules. All future `src/match/*`, `src/rules/*`, `src/setup/*`, `src/protocol/*` will be TS.
-2. **Test runner: TBD (Vitest preferred, Jest fallback)** — to be decided when `package.json` is created Day 2/3. Criteria: fast ESM-friendly, deterministic seed support for shuffle tests, no Nakama runtime mock needed for pure rule modules.
+1. **Language: TypeScript** — per `AGENTS.md:125`, no existing language, so TS is authoritative for Nakama JS runtime modules. All future `src/match/*`, `src/rules/*`, `src/setup/*`, `src/protocol/*` will be TS. **Amended 2026-08-25:** Migrated to Go per user request; now `main.go` + `internal/*` with `go 1.23.5` is authoritative (see §13).
+2. **Test runner: TBD (Vitest preferred, Jest fallback)** — to be decided when `package.json` is created Day 2/3. Criteria: fast ESM-friendly, deterministic seed support for shuffle tests, no Nakama runtime mock needed for pure rule modules. **Amended:** For Go, `go test` with deterministic seedable deck/shuffle helpers.
 3. **Docker project name: `rummy_backend`** — to be set via `name:` in `compose.yml` or `COMPOSE_PROJECT_NAME` to isolate from `tinybot`. Prevents container/volume name collision.
 4. **Branch strategy: trunk-based `main`, daily small commits** — no `develop` branch until needed. Commit style enforced per `AGENTS.md:212-219`.
 5. **Out-of-scope for Day 1:** No `docker-compose.yml`, no Nakama runtime skeleton, no `.env.example`, no `README.md`, no game behavior. This audit is intentionally read-only + single-doc deliverable to honor *Handmade Hero* slice size.
@@ -226,3 +230,33 @@ All outputs captured 2026-08-25 before writing this file. Raw logs available in 
 ---
 
 *End of Phase 1 Day 1 audit. Next is Phase 1 Day 2: Docker Compose for Nakama + PostgreSQL local development.*
+
+---
+
+## 13. Amendment 2026-08-25 — Migration from TypeScript to Go
+
+**Trigger:** User directive “let change typescript to go, rewrite the entire backend” + confirmed migration-commit strategy.
+
+**Commits affected:**
+- `9354b59 feat: add Nakama TypeScript runtime skeleton with InitModule` (Day 3 TS, now superseded but kept in history)
+- `55c7f3b refactor: migrate Nakama runtime from TypeScript to Go` (replaces TS with Go — `package.json`/`tsconfig.json`/`src/main.ts`/`build/` removed, `go.mod`/`go.sum`/`main.go`/`Dockerfile` added)
+
+**What changed:**
+- Runtime language: TypeScript (`nakama-runtime` JS, `tsc` → `build/index.js` → `nakama/data/modules/index.js` via volume mount) → **Go** (`go 1.23.5`, `nakama-common v1.36.0`, `main.go:22` `InitModule`, `Dockerfile` multi-stage `heroiclabs/nakama-pluginbuilder:3.26.0` → `backend.so` baked as `/nakama/data/modules/rummy_backend.so` in `rummy_backend:local` image).
+- Build: `npm run build` (`tsc`) → `go vet ./...` + `docker compose build` (plugin `CGO_ENABLED=1` `--buildmode=plugin`, 9.5s) then `docker compose up -d`. Volume changed from `./nakama/data:/nakama/data` to `./nakama/data/local.yml:ro` so baked `.so` is not hidden (TS volume hid image; Go requires baked).
+- Gitignore: added Go `vendor/*.so/backend.so`, kept legacy Node entries annotated.
+- Documentation: `AGENTS.md:124` now satisfied via Go (`go.mod` exists), `main.go:12` is the established language source. Future `internal/rules`, `internal/match`, etc., will be Go packages.
+
+**Why the version pin:** Go plugin must match Nakama’s Go toolchain (`runtime:go1.23.5` in `docker compose logs`). Initial `protobuf v1.36.6` caused `plugin was built with a different version of package google.golang.org/protobuf/internal/pragma` crash; pinned to `v1.36.4` (same as `nakama:v1.36.0` requires) resolves it. `go 1.23.5` in `go.mod` aligns with builder.
+
+**Verification after migration (copied from commit `55c7f3b`):**
+- `go vet ./...` ok, `docker compose build nakama` 9.5s, `docker compose up -d` both healthy
+- Logs: `Rummy backend InitModule Go Day 3 skeleton starting` (`main.go:23`), `Found runtime modules count 1 [rummy_backend.so]`, `Registered Go RPC health/version`
+- RPC: `POST /v2/account/authenticate/device` via `defaultkey` → JWT, `POST /v2/rpc/health` → `{"status":"ok","version":"0.1.0-go-day3-skeleton"}` (Go), `POST /v2/rpc/version` → `runtime:go` — console `200` at `http://127.0.0.1:7351`.
+
+**Impact on roadmap:**
+- Phase 1 Days 1–2 unchanged (Docker Compose still works, now builds Go image).
+- Day 3 deliverable still “Nakama runtime skeleton” but in Go.
+- Future days (rules, deck, match) will be Go pure packages under `internal/` instead of `src/`; test runner will be `go test`.
+
+**Preserved:** History of TS implementation remains in git for audit; this amendment keeps `docs/project-baseline.md` as the single source of truth for language decisions per `AGENTS.md:125`.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/gabriel-d0/rummy_backend/internal/protocol"
 	"github.com/gabriel-d0/rummy_backend/internal/rules/tile"
 	"github.com/heroiclabs/nakama-common/runtime"
 )
@@ -141,13 +142,13 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 		logger.Error("MatchLoop bad state type %T", state)
 		return state
 	}
-	// Handle start opcode (1) from host Seat 0 when in Waiting with 2-4 players.
-	// Day 24: minimal start, just transitions to OpeningDiscard; dealing is Day 25.
+	// Handle start opcode from host Seat 0 when in Waiting with 2-4 players.
+	// Day 24-26: OpClientStart is stable 1 per protocol.Version 1.
 	for _, msg := range messages {
 		op := msg.GetOpCode()
 		senderId := msg.GetUserId()
 		logger.Debug("MatchLoop tick=%d op=%d sender=%s len=%d", tick, op, senderId, len(messages))
-		if op == 1 { // START opcode (temporary, Day 26 will define stable opcodes)
+		if op == protocol.OpClientStart {
 			if st.GamePhase != PhaseWaiting {
 				logger.Warn("Start rejected: game already started phase %v", st.GamePhase)
 				continue
@@ -167,7 +168,7 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			st.TurnPhase = TurnMustDraw
 			logger.Info("Match started by host %s with %d players, phase OpeningDiscard seat 0", senderId, len(st.Players))
 			if dispatcher != nil {
-				_ = dispatcher.BroadcastMessage(1, []byte(`{"phase":"OpeningDiscard","currentSeat":0}`), nil, nil, true)
+				_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(`{"phase":"OpeningDiscard","currentSeat":0}`), nil, nil, true)
 			}
 		}
 	}

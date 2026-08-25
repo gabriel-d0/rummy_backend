@@ -249,6 +249,14 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			continue
 		}
 
+		// Normal discard: Playing MeldOrDiscard → append to discard row, advance turn
+		if op == protocol.OpClientDiscard && st.GamePhase == PhasePlaying && st.TurnPhase == TurnMeldOrDiscard {
+			if err := handleNormalDiscard(st, senderId, env.Payload, requestId, op, dispatcher, msg, logger); err != nil {
+				continue
+			}
+			continue
+		}
+
 		// Draw from stock: MustDraw → MeldOrDiscard, stock pop, rack append
 		if op == protocol.OpClientDrawStock {
 			if err := handleDrawStock(st, senderId, requestId, op, dispatcher, msg, logger); err != nil {
@@ -367,6 +375,64 @@ func handleDrawStock(st *RoundState, senderId PlayerId, requestId string, op int
 	logger.Info("DrawStock by %s seat %v drew %v, stock %d rack %d", senderId, seat, drawn.ID, len(st.Stock), len(rack))
 	if dispatcher != nil {
 		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"op":"drawStock","seat":%d,"stockCount":%d}`, int(seat), len(st.Stock))), nil, nil, true)
+	}
+	return nil
+}
+
+// handleNormalDiscard validates and applies a normal DISCARD in Playing MeldOrDiscard.
+// It checks ownership, ordered discard row, and advances turn anticlockwise.
+func handleNormalDiscard(st *RoundState, senderId PlayerId, payload []byte, requestId string, op int64, dispatcher runtime.MatchDispatcher, sender runtime.Presence, logger runtime.Logger) error {
+	if st.GamePhase != PhasePlaying || st.TurnPhase != TurnMeldOrDiscard {
+		sendError(dispatcher, sender, protocol.ErrCodeWrongPhase, "discard only in Playing MeldOrDiscard", requestId, op, logger)
+		return fmt.Errorf("wrong phase")
+	}
+	seat := SeatOfPlayer(st.Players, senderId)
+	if seat != st.CurrentSeat {
+		sendError(dispatcher, sender, protocol.ErrCodeNotYourTurn, "not your turn", requestId, op, logger)
+		return fmt.Errorf("not your turn")
+	}
+	var p struct {
+		TileId string `json:"tileId"`
+	}
+	if err := json.Unmarshal(payload, &p); err != nil {
+		sendError(dispatcher, sender, protocol.ErrCodeBadPayload, "payload must be {tileId}", requestId, op, logger)
+		return err
+	}
+	tileId := tile.TileInstanceId(p.TileId)
+	if tileId == "" {
+		sendError(dispatcher, sender, protocol.ErrCodeBadPayload, "tileId required", requestId, op, logger)
+		return fmt.Errorf("tileId empty")
+	}
+	rack := st.Racks[seat]
+	idx := -1
+	var toDiscard tile.TileInstance
+	for i, t := range rack {
+		if t.ID == tileId {
+			idx = i
+			toDiscard = t
+			break
+		}
+	}
+	if idx == -1 {
+		sendError(dispatcher, sender, protocol.ErrCodeInvalidTile, "tile not in rack", requestId, op, logger)
+		return fmt.Errorf("tile not in rack")
+	}
+	// Remove from rack
+	newRack := make([]tile.TileInstance, 0, len(rack)-1)
+	newRack = append(newRack, rack[:idx]...)
+	newRack = append(newRack, rack[idx+1:]...)
+	st.Racks[seat] = newRack
+	// Append to discard row, preserving order and distinguishing opening
+	entry := DiscardEntry{Tile: toDiscard, IsOpeningDiscard: false, Index: len(st.DiscardRow)}
+	st.DiscardRow = append(st.DiscardRow, entry)
+	// Advance turn
+	if err := AdvanceTurn(st); err != nil {
+		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, err.Error(), requestId, op, logger)
+		return err
+	}
+	logger.Info("Discard %v by %s seat %v, now current %v", tileId, senderId, st.CurrentSeat, st.CurrentSeat)
+	if dispatcher != nil {
+		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"op":"discard","seat":%d,"tileId":"%s","nextSeat":%d}`, int(seat), tileId, int(st.CurrentSeat))), nil, nil, true)
 	}
 	return nil
 }

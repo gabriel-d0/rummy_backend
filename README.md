@@ -2,7 +2,7 @@
 
 Server-authoritative multiplayer Romanian Tile Rummy for 2–4 players, implemented as a Nakama Go runtime plugin. This is the **Go** version — migrated from TypeScript on 2026-08-25 (`55c7f3b`). See `docs/project-baseline.md` §13 for migration rationale.
 
-The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 7–8 — Meld rules and table play**: validated runs/sets with jokers, 50-point opening with scoring, and `MELD_INITIAL`/`MELD_NEW` authoritative table play (see `docs/rules-decisions.md` and `docs/daily-log.md`).
+The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 8 — Post-opening table play**: validated runs/sets with jokers, 50-point opening with scoring, `MELD_INITIAL`/`MELD_NEW` and `EXTEND_MELD` (own/other melds, revalidate entire resulting meld, joker immutability) authoritative table play (see `docs/rules-decisions.md` and `docs/daily-log.md`).
 
 ## Prerequisites
 
@@ -119,13 +119,13 @@ Or use Nakama Console → API Explorer → RPC → `health` with the same `$TOKE
 ├── .env.example           # non-secret local defaults (5433, 7350/7351, admin/password)
 ├── Makefile               # dev helpers: vet/fmt/test/check + compose shortcuts (make help)
 ├── internal/
-│   ├── match/             # authoritative state: RoundState, phases, turn advance, visibility, handlers (discard, draw, meld_initial, meld_new)
+│   ├── match/             # authoritative state: RoundState (now Kind), phases, turn advance, visibility, handlers (discard, draw, meld_initial, meld_new, extend_meld, meld_common)
 │   ├── rules/
 │   │   ├── tile/          # TileColour, Rank, TileInstance, Joker
 │   │   ├── meld/          # Meld, ValidateRun/Set, joker ratio, Ace edge cases
 │   │   └── scoring/       # ScoreTile/Run/Set, Batch, ValidateInitialBatch/HasRun/Score/Ownership
 │   ├── setup/             # deck 106, seeded Rand, Shuffle, Deal, NewRoundState (15/14/stock)
-│   └── protocol/          # opcodes, envelope, validator, errors (102 OpServerError)
+│   └── protocol/          # opcodes, envelope, validator (now Extend jokerReps), errors (102 OpServerError)
 ├── docs/
 │   ├── project-baseline.md
 │   ├── rules-decisions.md # binding product decisions + TODO(product) ambiguities
@@ -141,7 +141,7 @@ Or use Nakama Console → API Explorer → RPC → `health` with the same `$TOKE
 
 Small, explicit, server-authoritative. Match handler orchestrates; rules modules are pure.
 
-- **`internal/match`** owns `RoundState` (`Players`, `Racks` private, `Stock`, `DiscardRow` ordered, `TableMelds` public, `CurrentSeat`, `GamePhase`, `TurnPhase`, `Winner`), `AdvanceTurn` anticlockwise `(current+1)%n`, `AllowedOps` matrix, `ValidateActivePlayer`/`ValidatePhaseOp`, visibility projection `PublicView`/`PrivateView`, and handlers `handleOpeningDiscard`, `handleDrawStock`, `handleNormalDiscard`, `handleMeldInitial`, `handleMeldNew`. Never trusts client meld validity.
+- **`internal/match`** owns `RoundState` (`Players`, `Racks` private, `Stock`, `DiscardRow` ordered, `TableMelds` public now with `Kind`, `CurrentSeat`, `GamePhase`, `TurnPhase`, `Winner`), `AdvanceTurn` anticlockwise `(current+1)%n`, `AllowedOps` matrix, `ValidateActivePlayer`/`ValidatePhaseOp`, visibility projection `PublicView`/`PrivateView`, and handlers `handleOpeningDiscard`, `handleDrawStock`, `handleNormalDiscard`, `handleMeldInitial`, `handleMeldNew`, `handleExtendMeld` plus shared `meld_common.go` (`buildMeldsFromPayload`, `applyMeldBatch`). Never trusts client meld validity.
 - **`internal/rules/meld`** validates `Run` (same colour, consecutive, `1-2-3` and `12-13-1` ok, `13-1-2` rejected, joker reps explicit, `real>=2*joker`) and `Set` (same rank, distinct colours, 3–4 tiles, joker reps) with structured `ValidationError`.
 - **`internal/rules/scoring`** scores tiles in context (`2–9:5`, `10–13:10`, Ace `1-2-3:5` vs `12-13-1:10` vs Ace-set `25`, Joker = represented tile) and validates initial batch (all tiles owned, each meld valid, ≥50, ≥1 run, no duplicate `TileId`, atomic).
 - **`internal/rules/tile`** defines `TileInstance{ID,Colour,Rank,IsJoker}` with unique `TileInstanceId`.
@@ -163,7 +163,7 @@ Stable `Version=1`, `OpCode` never reused. Client `1..9`, server `100..199` (`in
 | C→S | 5 | `OpClientPickupDiscardForMeld` | `{discardIndex:int, tileIds:[2]}` | `Playing/MustDraw` (opened) — *handler pending* |
 | C→S | 6 | `OpClientMeldInitial` | `{melds:[{id,kind:"run"/"set",tileIds:[3+],jokerReps:{jokerId:{colour,rank}}} ]}` | `Playing/MeldOrDiscard` (not yet opened, ≥50 with run, all tiles owned, each meld valid, no duplicate) → `HasOpened=true`, stays `MeldOrDiscard` |
 | C→S | 7 | `OpClientMeldNew` | same shape | `Playing/MeldOrDiscard` (already opened, each meld valid, no score minimum, atomic, meldId not colliding) → stays `MeldOrDiscard` |
-| C→S | 8 | `OpClientExtendMeld` | `{meldId:"...",tileIds:[1+ ]}` | `Playing/MeldOrDiscard` (opened) — *next* |
+| C→S | 8 | `OpClientExtendMeld` | `{meldId:"...",tileIds:[1+],jokerReps:{jokerId:{colour,rank}}}` | `Playing/MeldOrDiscard` (opened, revalidates entire resulting meld, preserves `JokerReps` immutability, atomic, any owner) → stays `MeldOrDiscard` |
 | C→S | 9 | `OpClientReplaceJoker` | `{targetMeldId:"...",tileId:"...",newMeldTiles:[2]}` | `Playing/MeldOrDiscard` (opened) — *deferred* |
 | S→C | 100 | `OpServerState` | `PrivateSnapshot` | match start / reconnect |
 | S→C | 101 | `OpServerStatePublic` | `PublicSnapshot` | broadcast |
@@ -221,14 +221,13 @@ Envelope: `{"v":1,"op":6,"requestId":"...","payload":{...}}` (`internal/protocol
 
 ## Next Steps (Roadmap)
 
-After `MELD_INITIAL`/`MELD_NEW` (Days 13–14, commits `de0d727`/`1b666c8`):
+After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD` (Days 13–15, commits `de0d727`/`1b666c8`/`6b0d980`):
 
-- **Day 15** — `EXTEND_MELD` (opened, revalidate whole resulting meld, any owner’s meld).
-- **Day 16** — `DRAW_PREVIOUS_DISCARD` (opened, `MustDraw`, not opening).
+- **Day 16** — `DRAW_PREVIOUS_DISCARD` (opened, `MustDraw`, not opening, latest discard only).
 - **Day 17** — `PICKUP_DISCARD_FOR_MELD` (opened, `MustDraw`, exactly 2 rack tiles + selected discard → valid meld, sweep later discards).
 - **Day 18** — `REPLACE_JOKER` (run exact tile / set missing colour, then immediately new meld with 2 rack tiles, atomic).
 - **Day 19** — `ROUND_COMPLETE` win detection and final snapshots.
-- Phase 9–14 polish: visibility hardening, deterministic simulation, developer tooling, refactor.
+- Phase 9–14 polish: visibility hardening, deterministic simulation, developer tooling.
 
 ---
 

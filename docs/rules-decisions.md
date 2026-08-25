@@ -2,7 +2,7 @@
 
 **Source:** Romanian Tile Rummy as documented by Pagat (`https://www.pagat.com/rummy/romtile.html`) — authoritative baseline per `AGENTS.md:3`.
 **Scope:** Server-authoritative 2–4 players, Nakama Go runtime (`go 1.23.5`), Docker local dev. Remi Online is inspiration only for social table experience — no branding/assets copied.
-**Status:** Day 14 — Phase 7–8 Meld and table play. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
+**Status:** Day 15 — Phase 8 Extend public melds. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
 
 ---
 
@@ -186,13 +186,15 @@ These opcodes will not be accepted; added only after baseline round is playable 
 
 Both handlers treat `tileIds` as opaque IDs server resolves to `TileInstance{Colour,Rank,IsJoker}` via `Racks[seat]` — never trusts client face values. `TableMeld.ID` is stable; `JokerReps` are immutable unless `REPLACE_JOKER`.
 
+**Day 15 `EXTEND_MELD` (commit `6b0d980`):** `handleExtendMeld` in `internal/match/extend_meld.go:22` parses `{meldId,tileIds,[jokerReps]}` where `meldId` is existing `TableMeld.ID` and `tileIds` are rack-owned `TileInstanceId`s. Requires `HasOpened==true`, `TurnPhase==MeldOrDiscard`, `CurrentSeat` is sender, target exists. Resolves new tiles via `Racks[seat]`, builds `combinedTiles = existing.Tiles + newTiles` and `combinedReps = existing.JokerReps + new joker reps`, preserves existing `JokerReps` immutability (attempt to change existing rep with different colour/rank → `bad_request`), validates entire resulting meld via `meld.New` + `ValidateRun`/`ValidateSet` (same colour consecutive for runs, distinct colours for sets, `real>=2*joker`), atomically `Racks[seat]` filter and `TableMelds[idx]` update (keeps `OwnerSeat`, updates `Kind` to stable `run`/`set`). Allows extending own or other players’ melds (`OwnerSeat` unchanged). Tests: `ExtendRunAtEnd` (low/high), `ExtendSetToFourColours`, `ExtendAnotherPlayersMeld`, `ExtendInvalidDoesNotMutate` (wrong colour/gap), `JokerImmutable`, `WithJokerNewTile`, `RejectsUnopenedAndWrongPhase`, `Conservation` `106`; `TableMeld.Kind` added for stable revalidation.
+
 ## 10. Next Artefacts
 
 - `Phase 2 Day 9`: Domain terminology doc (`tile, rack, stock, discard row, meld…`).
 - `Phase 2 Day 10`: Go types `TileColour`, `TileRank`, `TileInstanceId`, `Joker`, `Meld`, `RunMeld`, `SetMeld`, `Seat`, `GamePhase`, `TurnPhase` in `internal/rules/tile`.
 - Scoring isolated in `internal/rules/scoring` with table above.
-- Phase 9+: `EXTEND_MELD`, `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER`, `ROUND_COMPLETE`.
+- Phase 9+: `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER`, `ROUND_COMPLETE`.
 
 ---
 
-*Last updated: 2026-08-26 (Day 14 Phase 7–8). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*
+*Last updated: 2026-08-26 (Day 15 Phase 8). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*

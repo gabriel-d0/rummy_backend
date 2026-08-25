@@ -133,20 +133,32 @@ This log records each “one clearly scoped change per day” per `AGENTS.md:5` 
 
 ---
 
-## Current State (after Day 67 / AGENTS Day 14)
+## Phase 8 — Post-opening table play and developer experience (Days 68–70 / AGENTS Days 15, 22, 23)
 
-- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol`.
-- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
-- **Gameplay implemented:** `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard` loop), `DISCARD` (opening blocked + normal anticlockwise), `DRAW_STOCK`, validated `Run`/`Set` with jokers and Ace edge cases, scoring `5/10/25` with Joker delegation, `MELD_INITIAL` (50+ with run, atomic, `HasOpened`) and `MELD_NEW` (opened, no minimum, atomic, multiple per batch), `TableMeld` stable IDs/joker reps, tile conservation `106`, visibility redaction, standard `OpServerError` with `requestId` correlation.
-- **Tests:** `go test ./...` green; deterministic seeded shuffle; `CheckTileConservation` after every state change; exhaustive redaction (`setup/redaction_test.go` 9 combos) and meld matrix (`rules/meld/matrix_test.go`).
-- **Docs:** `docs/project-baseline.md` (Day 1 + Go §13), `docs/rules-decisions.md` (updated Day 14, `TODO(product)`), `docs/terminology.md` (59 lines), `README.md` (updated Phase 7–8, architecture, protocol, how to add command), `docs/protocol.md`, `docs/state-machine.md`, `docs/testing.md`, `AGENTS.md` source, `docs/daily-log.md` (this file).
-- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
-- **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED` (`pg_isready` `healthcheck` `InitModule` `rummy_backend.so` `console 200` `RPC health`).
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **68/22** | `4583413` `docs: document rummy development and protocol workflow` | `README.md` (235 lines), `docs/architecture.md` (new), `docs/protocol.md` (new), `docs/state-machine.md` (new), `docs/testing.md` (new), `docs/rules-decisions.md` §9, `docs/daily-log.md` | `README` now Phase 7–8 with `Architecture Overview`, `Protocol Overview` table ops 1..9/100..199, `How to Debug a Match`, `How to Add a New Command Safely` 9-step checklist (`phases.go:15`/`validator.go:12`/`rummy_match.go:268`), `docs/protocol.md` envelope/schemas/snapshots/errors, `docs/state-machine.md` `AllowedOps` matrix, `docs/testing.md` harness. Acceptance: new dev can start env, understand state machine, run tests from docs alone. |
+| **69/23** | `ba7d6b8` `refactor: clarify rummy match and rules modules` | `internal/match/meld_common.go` (new, 210 lines) `meld_initial.go` (250→45) `meld_new.go` (205→58) | Extract `clientMeldPayload`/`jokerRepPayload`/`meldBatchPayload`, `findPlayerIndex`, `requireMeldOrDiscardTurn`, `buildMeldsFromPayload`, `applyMeldBatch` to remove duplication between `MELD_INITIAL` and `MELD_NEW`; keep match thin, rules pure. Tests unchanged 18/18 meld handler tests, `go vet`/`docker compose build` green, no protocol break. |
+| **70/15** | `6b0d980` `feat: support extending public melds` | `internal/match/state.go` `TableMeld.Kind` added (`run`/`set`, stable), `internal/match/meld_common.go` sets `Kind`, `internal/protocol/validator.go` `OpClientExtendMeld` now accepts `jokerReps`, `internal/match/extend_meld.go` (180 lines) `extend_meld_test.go` (452 lines) `rummy_match.go:284` | `OpClientExtendMeld` in `MeldOrDiscard` (opened) revalidates entire resulting meld (`meld.New` + `ValidateRun/Set`), allows own or other’s meld, preserves `OwnerSeat` and `JokerReps` immutability (existing rep change → `bad_request`), atomic rack→table, `MeldIds` stable; tests extend run low/high end, set to 4 colours, other player, invalid atomic, joker immutable, joker new tile, wrong phase/notYourTurn, conservation `106`. |
 
-## Next (Day 68 / AGENTS Day 15)
-
-Per roadmap **Phase 8 Day 15 — Extend existing public melds**: `EXTEND_MELD` for opened players (own or others’ melds), client submits `targetMeldId` + rack `tileIds` (+ explicit resulting meld if needed), server revalidates entire resulting meld, atomic, `meldIds` stable, joker rep immutable per `docs/rules-decisions.md:3`. Then Days 16–19: discard pickups, joker replacement, round completion.
+*Days 68–70 verified via `make check` (`go vet` + `gofmt -l` + `go test ./...`) and `docker compose build`.*
 
 ---
 
-*Generated from `git log --oneline --reverse` `36c2c59..1b666c8` (67 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*
+## Current State (after Day 70 / AGENTS Day 15)
+
+- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol`.
+- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
+- **Gameplay implemented:** `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard` loop), `DISCARD` (opening blocked + normal anticlockwise), `DRAW_STOCK`, validated `Run`/`Set` with jokers and Ace edge cases, scoring `5/10/25` with Joker delegation, `MELD_INITIAL` (50+ with run, atomic, `HasOpened`), `MELD_NEW` (opened, no minimum, atomic, multiple per batch), **`EXTEND_MELD` (opened, any owner’s meld, revalidate entire resulting meld, joker immutability, atomic, `Kind` stable)** , `TableMeld{ID,Kind,Tiles,JokerReps,OwnerSeat}` stable, tile conservation `106`, visibility redaction, standard `OpServerError` with `requestId` correlation.
+- **Tests:** `go test ./...` green (18 meld handler tests plus extend 8, `CheckTileConservation` after every change, exhaustive redaction `setup/redaction_test.go` 9 combos, meld matrix `rules/meld/matrix_test.go`).
+- **Docs:** `docs/project-baseline.md` (Day 1 + Go §13), `docs/rules-decisions.md` (Day 14 + §9 `Implemented Table Play` + now §9 extended for `EXTEND_MELD`), `docs/terminology.md` (59 lines), `README.md` (Phase 7–8 + Phase 8 extend), `docs/protocol.md` (now documents `ExtendMeld` `jokerReps`), `docs/state-machine.md` (now includes `Extend`), `docs/testing.md`, `docs/architecture.md`, `AGENTS.md` source, `docs/daily-log.md` (this file).
+- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
+- **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED` (`pg_isready` `healthcheck` `InitModule` `rummy_backend.so` `console 200` `RPC health`).
+
+## Next (Day 71 / AGENTS Day 16)
+
+Per AGENTS **Day 16 — Pick up the immediately previous discard**: `DRAW_PREVIOUS_DISCARD` in `Playing/MustDraw` for opened player, not opening blocked tile, moves only latest discard to rack, transitions to `MeldOrDiscard`, one draw per turn. See `internal/match/discard.go:9` `CanPickupPreviousDiscard` (already validates `not opening`) and `docs/rules-decisions.md:1.5`. Then Days 17–19: `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER`, `ROUND_COMPLETE`.
+
+---
+
+*Generated from `git log --oneline --reverse` `36c2c59..6b0d980` (70 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*

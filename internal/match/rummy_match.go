@@ -249,6 +249,14 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 			continue
 		}
 
+		// Draw from stock: MustDraw → MeldOrDiscard, stock pop, rack append
+		if op == protocol.OpClientDrawStock {
+			if err := handleDrawStock(st, senderId, requestId, op, dispatcher, msg, logger); err != nil {
+				continue
+			}
+			continue
+		}
+
 		// Other opcodes (draw/meld) will be handled Day 35+; for now just phase validation.
 		// If we reach here, op was allowed by phase but not yet implemented — treat as not implemented
 		sendError(dispatcher, msg, protocol.ErrCodeBadRequest, fmt.Sprintf("op %d not implemented yet", op), requestId, op, logger)
@@ -323,6 +331,42 @@ func handleOpeningDiscard(st *RoundState, senderId PlayerId, payload []byte, req
 	logger.Info("Opening discard %v by %s, now current %v phase Playing", tileId, senderId, next)
 	if dispatcher != nil {
 		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"phase":"Playing","currentSeat":%d,"discard":"%s","isOpening":true}`, int(next), tileId)), nil, nil, true)
+	}
+	return nil
+}
+
+// handleDrawStock validates and applies DRAW_STOCK: MustDraw current player
+// draws one tile from stock top (last element) to rack, transitioning to
+// MeldOrDiscard. Stock empty is a deterministic MVP decision per
+// docs/rules-decisions.md:6.2 — currently rejected as dead round.
+func handleDrawStock(st *RoundState, senderId PlayerId, requestId string, op int64, dispatcher runtime.MatchDispatcher, sender runtime.Presence, logger runtime.Logger) error {
+	// Active-player and phase already validated, but double-check for direct calls
+	if st.GamePhase != PhasePlaying || st.TurnPhase != TurnMustDraw {
+		sendError(dispatcher, sender, protocol.ErrCodeWrongPhase, "draw only in Playing MustDraw", requestId, op, logger)
+		return fmt.Errorf("wrong phase")
+	}
+	seat := SeatOfPlayer(st.Players, senderId)
+	if seat != st.CurrentSeat {
+		sendError(dispatcher, sender, protocol.ErrCodeNotYourTurn, "not your turn", requestId, op, logger)
+		return fmt.Errorf("not your turn")
+	}
+	if len(st.Stock) == 0 {
+		// MVP: stock exhausted → only discard pickup allowed; for now treat as dead round error
+		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, "stock empty", requestId, op, logger)
+		return fmt.Errorf("stock empty")
+	}
+	// Pop top (last) of stock
+	topIdx := len(st.Stock) - 1
+	drawn := st.Stock[topIdx]
+	st.Stock = st.Stock[:topIdx]
+	// Append to rack
+	rack := st.Racks[seat]
+	rack = append(rack, drawn)
+	st.Racks[seat] = rack
+	st.TurnPhase = TurnMeldOrDiscard
+	logger.Info("DrawStock by %s seat %v drew %v, stock %d rack %d", senderId, seat, drawn.ID, len(st.Stock), len(rack))
+	if dispatcher != nil {
+		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"op":"drawStock","seat":%d,"stockCount":%d}`, int(seat), len(st.Stock))), nil, nil, true)
 	}
 	return nil
 }

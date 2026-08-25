@@ -178,10 +178,30 @@ This log records each “one clearly scoped change per day” per `AGENTS.md:5` 
 - **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
 - **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED` (`pg_isready` `healthcheck` `InitModule` `rummy_backend.so` `console 200` `RPC health`).
 
-## Next (Day 76 / AGENTS Day 21)
+## Phase 11 — Test harness and deterministic end-to-end simulation (Day 76 / AGENTS Day 21)
 
-Per AGENTS **Day 21 — Test harness and deterministic end-to-end simulation**: deterministic test harness for creating match state with fixed deck/order, simulate `match start` → `opening discard` → `draw/discard` turns → `initial meld` → `extension` → `previous-discard`/`pickup` → `joker replacement` → `round completion`, keep test readable with named tiles/builders, add invariant assertion after every action per `docs/testing.md`. Then Days 22–23 already done (tooling + refactor) and optional client.
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **76/21** | `01f6a3c` `test: add deterministic rummy match simulation` | `internal/match/deterministic_simulation_test.go` (new, 317 lines) | Deterministic harness with `makeFiller`/`named tiles` (`aR1`…`winTile`), fixed deck `15+14+77=106`, helper `exec` via `protocol.MustEnvelope`→`MatchLoop` and `assertConservation` (`CheckTileConservation`+`Validate`) after every action. Simulates `MatchInit`→`MatchJoin`→`Start`→`OpeningDiscard` (alice `aF1`)→`BobDrawDiscard`→`AliceInitialMeld` (3 runs 50) →`BobInitialAndExtend` (3 melds 60 + `bExt` 13 onto `b-run1`)→`AliceDrawPreviousDiscard`→`BobPickupDiscardForMeld` (sweep later) →`WinViaDiscard` (alice `final-win` → `RoundComplete` winner 0, no post-win gameplay). Each subtest `t.Run` fails with step name. Acceptance: single readable test demonstrates major mechanics, invariant after every action, failures identify transition. |
+
+*Day 76 verified via `make check` (`go vet` + `gofmt -l` + `go test -run TestDeterministicSimulation -v` 7 subtests PASS) and `docker compose build`; `go test ./...` green.*
 
 ---
 
-*Generated from `git log --oneline --reverse` `36c2c59..3e1b92a` (77 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*
+## Current State (after Day 76 / AGENTS Day 21)
+
+- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol`.
+- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
+- **Gameplay implemented:** `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard` loop), `DISCARD` (opening blocked + normal anticlockwise), `DRAW_STOCK`, `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD` (sweep), `Run`/`Set` validated with jokers and Ace edge cases, scoring `5/10/25` with Joker delegation, `MELD_INITIAL` (50+ with run), `MELD_NEW`, `EXTEND_MELD` (`Kind` stable), `REPLACE_JOKER`, `ROUND_COMPLETE` (rack==0), `SNAPSHOT HARDENING` (versioned `1`, reconnection), **plus `TestDeterministicSimulation` harness** (`makeFiller`, named `aR1`…`winTile`, `exec` helper, `assertConservation` after every `MatchLoop` action, 7 substeps, `CheckTileConservation`+`Validate`).
+- **Tests:** `go test ./...` green (27 tests including deterministic simulation 7 subtests, `CheckTileConservation` after every step, exhaustive redaction, meld matrix, win 4, snapshot hardening 4).
+- **Docs:** `docs/project-baseline.md` (Day 1 + Go §13), `docs/rules-decisions.md` (Day 19 + §9 plus `HARDENING` note), `docs/terminology.md`, `README.md` (Phase 8–10 + Phase 11 `TestDeterministicSimulation`), `docs/protocol.md`, `docs/state-machine.md`, `docs/testing.md` (now references deterministic harness), `docs/architecture.md`, `AGENTS.md` source, `docs/daily-log.md` (this file).
+- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
+- **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED`.
+
+## Next (Day 77 / AGENTS Day 22 — already done)
+
+Per AGENTS **Day 22 — Developer tooling and operator documentation** already completed as `4583413` (`docs/protocol.md` etc.); Days 22–23 are done. Next polish: final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and optional minimal client adapter (`Day 24` `AGENTS.md:812` — only after backend stable). See `docs/architecture.md` and `docs/testing.md` for harness extension.
+
+---
+
+*Generated from `git log --oneline --reverse` `36c2c59..01f6a3c` (78 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*

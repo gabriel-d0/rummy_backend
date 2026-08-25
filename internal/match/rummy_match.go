@@ -5,6 +5,7 @@ package match
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/gabriel-d0/rummy_backend/internal/protocol"
 	"github.com/gabriel-d0/rummy_backend/internal/rules/tile"
@@ -142,24 +143,89 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 		logger.Error("MatchLoop bad state type %T", state)
 		return state
 	}
-	// Handle start opcode from host Seat 0 when in Waiting with 2-4 players.
-	// Day 24-26: OpClientStart is stable 1 per protocol.Version 1.
 	for _, msg := range messages {
-		op := msg.GetOpCode()
-		senderId := msg.GetUserId()
-		logger.Debug("MatchLoop tick=%d op=%d sender=%s len=%d", tick, op, senderId, len(messages))
+		data := msg.GetData()
+		senderId := PlayerId(msg.GetUserId())
+		// Envelope parse + payload schema validation (Day 27-28). Use ValidateEnvelope which checks version/op/payload.
+		env, err := protocol.ValidateEnvelope(data)
+		if err != nil {
+			// Try to extract requestId/op for error correlation even on parse failure
+			var reqId string
+			var op int64
+			// Attempt to parse partial envelope for requestId/op
+			// If data is not JSON, requestId stays empty
+			_ = op
+			_ = reqId
+			if env.RequestId != "" {
+				reqId = env.RequestId
+				op = env.OpCode
+			} else if msg.GetOpCode() != 0 {
+				op = msg.GetOpCode()
+			}
+			code := protocol.ErrCodeBadJSON
+			if pe, ok := err.(*protocol.ParseError); ok {
+				switch pe.Code {
+				case "empty":
+					code = protocol.ErrCodeBadJSON
+				case "bad_json":
+					code = protocol.ErrCodeBadJSON
+				case "bad_version":
+					code = protocol.ErrCodeBadVersion
+				case "unknown_opcode":
+					code = protocol.ErrCodeUnknownOpcode
+				case "bad_payload":
+					code = protocol.ErrCodeBadPayload
+				default:
+					code = pe.Code
+				}
+			}
+			sendError(dispatcher, msg, code, err.Error(), reqId, op, logger)
+			continue
+		}
+		// Use envelope RequestId and OpCode for correlation; Nakama GetOpCode should match envelope OpCode
+		op := env.OpCode
+		requestId := env.RequestId
+		// Active-player check (Day 33) — only for non-Waiting phases; start is special case below
+		if st.GamePhase == PhaseOpeningDiscard || st.GamePhase == PhasePlaying {
+			if perr := ValidateActivePlayer(st, senderId); perr != nil {
+				perr.RequestId = requestId
+				perr.OpCode = op
+				sendError(dispatcher, msg, perr.Code, perr.Message, requestId, op, logger)
+				continue
+			}
+		}
+		// Phase-op check (Day 32/34)
+		if perr := ValidatePhaseOp(st, op); perr != nil {
+			perr.RequestId = requestId
+			perr.OpCode = op
+			sendError(dispatcher, msg, perr.Code, perr.Message, requestId, op, logger)
+			continue
+		}
+		// Payload already validated via ValidateEnvelope, but double-check for safety
+		if perr := protocol.ValidatePayload(op, env.Payload); perr != nil {
+			if pe, ok := perr.(*protocol.ParseError); ok {
+				sendError(dispatcher, msg, protocol.ErrCodeBadPayload, pe.Message, requestId, op, logger)
+			} else {
+				sendError(dispatcher, msg, protocol.ErrCodeBadPayload, perr.Error(), requestId, op, logger)
+			}
+			continue
+		}
+
+		logger.Debug("MatchLoop tick=%d op=%d sender=%s requestId=%s", tick, op, senderId, requestId)
+
+		// Handle start opcode from host Seat 0 when in Waiting with 2-4 players.
 		if op == protocol.OpClientStart {
 			if st.GamePhase != PhaseWaiting {
-				logger.Warn("Start rejected: game already started phase %v", st.GamePhase)
+				sendError(dispatcher, msg, protocol.ErrCodeWrongPhase, "game already started", requestId, op, logger)
 				continue
 			}
 			if len(st.Players) < 2 {
-				logger.Warn("Start rejected: need 2 players, have %d", len(st.Players))
+				sendError(dispatcher, msg, protocol.ErrCodeBadRequest, "need 2 players", requestId, op, logger)
 				continue
 			}
-			seat := SeatOfPlayer(st.Players, PlayerId(senderId))
+			seat := SeatOfPlayer(st.Players, senderId)
 			if seat != 0 {
-				logger.Warn("Start rejected: only host Seat 0 may start, sender seat %v", seat)
+				sendError(dispatcher, msg, protocol.ErrCodeNotYourTurn, "only host may start", requestId, op, logger)
 				continue
 			}
 			// Transition to OpeningDiscard
@@ -171,8 +237,28 @@ func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *s
 				_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(`{"phase":"OpeningDiscard","currentSeat":0}`), nil, nil, true)
 			}
 		}
+		// Other opcodes (discard/draw/meld) will be handled Day 35+; for now just phase validation.
 	}
 	return st
+}
+
+// sendError sends OpServerError to the sender only (not broadcast) with requestId correlation.
+func sendError(dispatcher runtime.MatchDispatcher, sender runtime.Presence, code, message, requestId string, op int64, logger runtime.Logger) {
+	if dispatcher == nil {
+		logger.Warn("sendError %s %s requestId=%s op=%d (no dispatcher)", code, message, requestId, op)
+		return
+	}
+	// Prefer to send only to sender if available via Presence, else broadcast
+	errResp := protocol.NewError(code, message, requestId, map[string]string{"op": fmt.Sprintf("%d", op)})
+	errResp.OpCode = op
+	payload := protocol.EncodeError(errResp)
+	// Use presence from MatchData sender if possible
+	var presences []runtime.Presence
+	if sender != nil {
+		presences = []runtime.Presence{sender}
+	}
+	_ = dispatcher.BroadcastMessage(protocol.OpServerError, payload, presences, nil, true)
+	logger.Info("Sent error %s to %v: %s requestId=%s op=%d", code, sender, message, requestId, op)
 }
 
 func (m *RummyMatch) MatchTerminate(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, graceSeconds int) interface{} {

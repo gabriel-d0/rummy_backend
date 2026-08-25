@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/gabriel-d0/rummy_backend/internal/protocol"
 	"github.com/heroiclabs/nakama-common/runtime"
 )
 
@@ -70,7 +71,9 @@ func (m *mockMatchData) GetReliable() bool     { return true }
 func (m *mockMatchData) GetReceiveTime() int64 { return 0 }
 
 func newMatchData(userId string, opCode int64) *mockMatchData {
-	return &mockMatchData{mockPresence: mockPresence{userId: userId, sessionId: "sess-" + userId, username: "user-" + userId, node: "node1"}, opCode: opCode}
+	// Data is a proper envelope JSON so MatchLoop's ValidateEnvelope succeeds
+	data := protocol.MustEnvelope(opCode, map[string]interface{}{})
+	return &mockMatchData{mockPresence: mockPresence{userId: userId, sessionId: "sess-" + userId, username: "user-" + userId, node: "node1"}, opCode: opCode, data: data}
 }
 
 func TestMatchInit(t *testing.T) {

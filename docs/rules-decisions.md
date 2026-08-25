@@ -2,7 +2,7 @@
 
 **Source:** Romanian Tile Rummy as documented by Pagat (`https://www.pagat.com/rummy/romtile.html`) — authoritative baseline per `AGENTS.md:3`.
 **Scope:** Server-authoritative 2–4 players, Nakama Go runtime (`go 1.23.5`), Docker local dev. Remi Online is inspiration only for social table experience — no branding/assets copied.
-**Status:** Day 15 — Phase 8 Extend public melds. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
+**Status:** Day 19 — Phase 8–9 Round completion. Decisions here are binding for all `internal/*` pure rules modules and `main.go` match handler. Ambiguities are marked `TODO(product):` and must not be guessed.
 
 ---
 
@@ -188,13 +188,21 @@ Both handlers treat `tileIds` as opaque IDs server resolves to `TileInstance{Col
 
 **Day 15 `EXTEND_MELD` (commit `6b0d980`):** `handleExtendMeld` in `internal/match/extend_meld.go:22` parses `{meldId,tileIds,[jokerReps]}` where `meldId` is existing `TableMeld.ID` and `tileIds` are rack-owned `TileInstanceId`s. Requires `HasOpened==true`, `TurnPhase==MeldOrDiscard`, `CurrentSeat` is sender, target exists. Resolves new tiles via `Racks[seat]`, builds `combinedTiles = existing.Tiles + newTiles` and `combinedReps = existing.JokerReps + new joker reps`, preserves existing `JokerReps` immutability (attempt to change existing rep with different colour/rank → `bad_request`), validates entire resulting meld via `meld.New` + `ValidateRun`/`ValidateSet` (same colour consecutive for runs, distinct colours for sets, `real>=2*joker`), atomically `Racks[seat]` filter and `TableMelds[idx]` update (keeps `OwnerSeat`, updates `Kind` to stable `run`/`set`). Allows extending own or other players’ melds (`OwnerSeat` unchanged). Tests: `ExtendRunAtEnd` (low/high), `ExtendSetToFourColours`, `ExtendAnotherPlayersMeld`, `ExtendInvalidDoesNotMutate` (wrong colour/gap), `JokerImmutable`, `WithJokerNewTile`, `RejectsUnopenedAndWrongPhase`, `Conservation` `106`; `TableMeld.Kind` added for stable revalidation.
 
+**Day 16 `DRAW_PREVIOUS_DISCARD` (commit `456c045`):** `handleDrawPreviousDiscard` in `internal/match/draw_previous_discard.go:12` parses `{}`; requires `HasOpened==true`, `Playing/MustDraw`, `CurrentSeat`, `CanPickupPreviousDiscard` (`len>0` and `last.IsOpeningDiscard==false` per `discard.go:15`). Moves `DiscardRow` tail `Tile` to `Racks[seat]`, `TurnPhase→MeldOrDiscard`, `Stock` unchanged. Tests: `Success` (rack 14→15, discard 3→2, latest only), `UnopenedRejected`, `OpeningBlocked`, `OnlyLatest`, `CannotDrawTwice` (`MeldOrDiscard` forbids second draw), `NotYourTurn/WrongPhase`, conservation `106`.
+
+**Day 17 `PICKUP_DISCARD_FOR_MELD` (commit `0da5f3a`):** `handlePickupDiscardForMeld` in `internal/match/pickup_discard_for_meld.go:22` parses `{discardIndex, tileIds[2], [jokerReps], [kind]}`; requires `HasOpened`, `MustDraw`, `CanPickupDiscardForMeld` (not opening, in range, `MustDraw`), `tileIds` owned and distinct, `discardTile` +2 `rackTiles` form a valid 3-tile `meld.New` (`run` or `set`, `real>=2*joker` if joker, `jokerReps` for any joker). Atomically: `Racks[seat] = rack -2 + laterTiles` where `laterTiles = DiscardRow[discardIndex+1:]` (swept in order), `DiscardRow = DiscardRow[:discardIndex]` reindexed, `TableMelds += newMeld` (`Kind` `run`/`set`), `TurnPhase→MeldOrDiscard`. Tests: `ValidSet` (7 red +7 yellow/blue, sweep `disc2`), `ValidRun` (5-6-7), `InvalidRejected`, `OpeningBlocked`, `LaterSweep` (2 later swept in order), `Atomic`, `RequiresOpenedAndMustDraw`.
+
+**Day 18 `REPLACE_JOKER` (commit `8dd8ea9`):** `handleReplaceJoker` in `internal/match/replace_joker.go:22` parses `{targetMeldId,tileId,newMeldTiles[2],[jokerReps],[newMeldKind]}`; requires `HasOpened`, `MeldOrDiscard`, target exists and has joker, `tileId` owned real tile equals some joker’s `represented` `Colour`/`Rank` exactly (run exact tile per `discard.go:15` MVP, set exact missing colour per `6.4` MVP), `newMeldTiles[2]` owned distinct real tiles (MVP jokers not allowed in new tiles), `newMeldJokerReps` must contain recovered joker’s new `colour`/`rank`. Builds `updatedTiles = target.Tiles with joker→real` and `updatedReps` without that joker, revalidates `updatedMeld` via `meld.New`+`ValidateRun/Set`; builds `newMeldTiles = [recoveredJoker]+newTiles` with `newMeldReps` (recovered joker’s new rep), tries `run` then `set` (or forced `newMeldKind`), validates, then atomically `Racks[seat] = rack -3` (tileId+2), `TableMelds[targetIdx]=updatedTM` (keeps `OwnerSeat`), `TableMelds+=newTM`, stays `MeldOrDiscard`. Tests: `RunValid` (5-6-J7 with 7→5-6-7 and new run 8-9-J10), `RunWrongTile`, `SetValid` (9 set), `SetWrongColour`, `NewMeldRequiresTwoTiles` (invalid new meld), `AtomicRollback`, conservation `106`.
+
+**Day 19 `ROUND_COMPLETE` (this commit):** `win.go:12` `checkWinAndComplete` checks `len(Racks[seat])==0` after any successful `DISCARD` or `MELD`/`EXTEND`/`REPLACE`/`PICKUP` mutation per `6.1` MVP (win without final discard allowed: `rack==0` after `MELD`/`EXTEND`/`REPLACE`/`PICKUP` also wins). Transitions `GamePhase→RoundComplete`, `Winner=seat`, `CurrentSeat=winner`, broadcasts `101` `RoundComplete`/`103` `roundComplete`, blocks further `AllowedOps` (`RoundComplete` has none via `phases.go:15`), preserves `CheckTileConservation` `106` and `PublicView` winner snapshot. Tests: `WinAfterDiscardToZero`, `WinAfterMeldWithoutDiscard`, `NoGameplayAfterRoundComplete`, `WinnerCorrectlyRecorded`.
+
 ## 10. Next Artefacts
 
 - `Phase 2 Day 9`: Domain terminology doc (`tile, rack, stock, discard row, meld…`).
 - `Phase 2 Day 10`: Go types `TileColour`, `TileRank`, `TileInstanceId`, `Joker`, `Meld`, `RunMeld`, `SetMeld`, `Seat`, `GamePhase`, `TurnPhase` in `internal/rules/tile`.
 - Scoring isolated in `internal/rules/scoring` with table above.
-- Phase 9+: `DRAW_PREVIOUS_DISCARD`, `PICKUP_DISCARD_FOR_MELD`, `REPLACE_JOKER`, `ROUND_COMPLETE`.
+- Phase 10+: `State visibility`/`reconnection`/`snapshot hardening`, `Test harness`/`deterministic simulation`, `Developer tooling` (already partially done `docs/protocol.md` etc.), `Refactoring`, `Optional minimal client`.
 
 ---
 
-*Last updated: 2026-08-26 (Day 15 Phase 8). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*
+*Last updated: 2026-08-26 (Day 19 Phase 8–9). TODOs require product confirmation — this doc is the blocking record before any rule code is merged.*

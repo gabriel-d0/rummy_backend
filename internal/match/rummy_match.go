@@ -473,6 +473,12 @@ func handleNormalDiscard(st *RoundState, senderId PlayerId, payload []byte, requ
 	// Append to discard row, preserving order and distinguishing opening
 	entry := DiscardEntry{Tile: toDiscard, IsOpeningDiscard: false, Index: len(st.DiscardRow)}
 	st.DiscardRow = append(st.DiscardRow, entry)
+	// Win check: empty rack after discard (final discard may be winning move per docs/rules-decisions.md:6.1)
+	if len(newRack) == 0 {
+		if checkWinAndComplete(st, seat, dispatcher, logger) {
+			return nil
+		}
+	}
 	// Advance turn
 	if err := AdvanceTurn(st); err != nil {
 		sendError(dispatcher, sender, protocol.ErrCodeBadRequest, err.Error(), requestId, op, logger)

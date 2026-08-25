@@ -44,6 +44,9 @@ func handleMeldNew(st *RoundState, senderId PlayerId, payload []byte, requestId 
 	if err := applyMeldBatch(st, seat, rack, scoringMelds, seenTile, requestId, op, dispatcher, sender, logger); err != nil {
 		return err
 	}
+	if checkWinAndComplete(st, seat, dispatcher, logger) {
+		return nil
+	}
 	logger.Info("MeldNew by %s seat %v melds %d newRack %d table %d", senderId, seat, len(scoringMelds), len(st.Racks[seat]), len(st.TableMelds))
 	if dispatcher != nil {
 		_ = dispatcher.BroadcastMessage(protocol.OpServerEvent, []byte(fmt.Sprintf(`{"op":"meldNew","seat":%d,"melds":%d}`, int(seat), len(scoringMelds))), nil, nil, true)

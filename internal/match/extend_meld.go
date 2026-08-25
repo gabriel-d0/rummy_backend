@@ -222,6 +222,9 @@ func handleExtendMeld(st *RoundState, senderId PlayerId, payload []byte, request
 		return err
 	}
 	st.TableMelds[targetIdx] = updated
+	if checkWinAndComplete(st, seat, dispatcher, logger) {
+		return nil
+	}
 
 	logger.Info("ExtendMeld by %s seat %v meld %q tiles %d newRack %d", senderId, seat, req.MeldId, len(newTiles), len(newRack))
 	if dispatcher != nil {

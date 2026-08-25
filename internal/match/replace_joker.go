@@ -330,6 +330,9 @@ func handleReplaceJoker(st *RoundState, senderId PlayerId, payload []byte, reque
 		return err
 	}
 	st.TableMelds = append(st.TableMelds, newTM)
+	if checkWinAndComplete(st, seat, dispatcher, logger) {
+		return nil
+	}
 
 	logger.Info("ReplaceJoker by %s seat %v target %q repl %v newMeld %q kind %v", senderId, seat, req.TargetMeldId, tileId, newMeld.ID, newMeld.Kind)
 	if dispatcher != nil {

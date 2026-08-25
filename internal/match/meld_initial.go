@@ -40,6 +40,9 @@ func handleMeldInitial(st *RoundState, senderId PlayerId, payload []byte, reques
 		return err
 	}
 	st.Players[pIdx].HasOpened = true
+	if checkWinAndComplete(st, seat, dispatcher, logger) {
+		return nil
+	}
 
 	logger.Info("MeldInitial by %s seat %v melds %d newRack %d table %d", senderId, seat, len(scoringMelds), len(st.Racks[seat]), len(st.TableMelds))
 	if dispatcher != nil {

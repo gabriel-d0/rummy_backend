@@ -248,6 +248,9 @@ func handlePickupDiscardForMeld(st *RoundState, senderId PlayerId, payload []byt
 	}
 	st.TableMelds = append(st.TableMelds, tm)
 	st.TurnPhase = TurnMeldOrDiscard
+	if checkWinAndComplete(st, seat, dispatcher, logger) {
+		return nil
+	}
 
 	logger.Info("PickupDiscardForMeld by %s seat %v discardIdx %d tile %v meld %q kind %v later %d newRack %d", senderId, seat, req.DiscardIndex, discardTile.ID, validatedMeld.ID, validatedKind, len(laterTiles), len(newRack))
 	if dispatcher != nil {

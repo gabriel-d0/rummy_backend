@@ -57,6 +57,22 @@ func (m *mockDispatcher) MatchLabelUpdate(label string) error {
 	return nil
 }
 
+// mockMatchData implements runtime.MatchData for MatchLoop tests.
+type mockMatchData struct {
+	mockPresence
+	opCode int64
+	data   []byte
+}
+
+func (m *mockMatchData) GetOpCode() int64      { return m.opCode }
+func (m *mockMatchData) GetData() []byte       { return m.data }
+func (m *mockMatchData) GetReliable() bool     { return true }
+func (m *mockMatchData) GetReceiveTime() int64 { return 0 }
+
+func newMatchData(userId string, opCode int64) *mockMatchData {
+	return &mockMatchData{mockPresence: mockPresence{userId: userId, sessionId: "sess-" + userId, username: "user-" + userId, node: "node1"}, opCode: opCode}
+}
+
 func TestMatchInit(t *testing.T) {
 	m := &RummyMatch{}
 	state, tickRate, label := m.MatchInit(context.Background(), &testLogger{}, nil, nil, nil)
@@ -176,4 +192,85 @@ func TestMatchLoopAndTerminate(t *testing.T) {
 	}
 	// Ensure dispatcher and logger nil safe (previous tests used nil dispatcher)
 	_, _, _ = m.MatchJoinAttempt(context.Background(), logger, &sql.DB{}, nil, nil, 0, state, newPresence("x"), nil)
+}
+
+func TestMatchStartViaLoop(t *testing.T) {
+	m := &RummyMatch{}
+	logger := &testLogger{}
+	state, _, _ := m.MatchInit(context.Background(), logger, nil, nil, nil)
+	dispatcher := &mockDispatcher{}
+	// Join 2 players
+	pres := []runtime.Presence{newPresence("alice"), newPresence("bob")}
+	state = m.MatchJoin(context.Background(), logger, nil, nil, dispatcher, 0, state, pres)
+	st := state.(*RoundState)
+	if st.GamePhase != PhaseWaiting {
+		t.Fatalf("phase should be Waiting before start")
+	}
+	// Non-host tries to start — should be rejected (phase stays Waiting)
+	msg := newMatchData("bob", 1)
+	next := m.MatchLoop(context.Background(), logger, nil, nil, dispatcher, 1, state, []runtime.MatchData{msg})
+	st = next.(*RoundState)
+	if st.GamePhase != PhaseWaiting {
+		t.Fatalf("non-host start should be rejected, phase %v", st.GamePhase)
+	}
+	// Host starts — should transition
+	msgHost := newMatchData("alice", 1)
+	next = m.MatchLoop(context.Background(), logger, nil, nil, dispatcher, 2, state, []runtime.MatchData{msgHost})
+	st = next.(*RoundState)
+	if st.GamePhase != PhaseOpeningDiscard {
+		t.Fatalf("host start should transition to OpeningDiscard, got %v", st.GamePhase)
+	}
+	if st.CurrentSeat != 0 {
+		t.Fatalf("CurrentSeat %v want 0", st.CurrentSeat)
+	}
+	// Second start should be rejected (already started)
+	msgAgain := newMatchData("alice", 1)
+	next = m.MatchLoop(context.Background(), logger, nil, nil, dispatcher, 3, st, []runtime.MatchData{msgAgain})
+	st = next.(*RoundState)
+	if st.GamePhase != PhaseOpeningDiscard {
+		t.Fatalf("second start should stay OpeningDiscard")
+	}
+}
+
+func TestMatchStartViaLoopNotEnoughPlayers(t *testing.T) {
+	m := &RummyMatch{}
+	logger := &testLogger{}
+	state, _, _ := m.MatchInit(context.Background(), logger, nil, nil, nil)
+	dispatcher := &mockDispatcher{}
+	// Only 1 player
+	state = m.MatchJoin(context.Background(), logger, nil, nil, dispatcher, 0, state, []runtime.Presence{newPresence("alice")})
+	msg := newMatchData("alice", 1)
+	next := m.MatchLoop(context.Background(), logger, nil, nil, dispatcher, 1, state, []runtime.MatchData{msg})
+	st := next.(*RoundState)
+	if st.GamePhase != PhaseWaiting {
+		t.Fatalf("1 player should not start, phase %v", st.GamePhase)
+	}
+}
+
+func TestMatchStartViaSignal(t *testing.T) {
+	m := &RummyMatch{}
+	logger := &testLogger{}
+	state, _, _ := m.MatchInit(context.Background(), logger, nil, nil, nil)
+	// Join 2
+	state = m.MatchJoin(context.Background(), logger, nil, nil, nil, 0, state, []runtime.Presence{newPresence("alice"), newPresence("bob")})
+	// Signal start
+	next, out := m.MatchSignal(context.Background(), logger, nil, nil, nil, 0, state, "start")
+	st := next.(*RoundState)
+	if st.GamePhase != PhaseOpeningDiscard || out != "started" {
+		t.Fatalf("signal start should transition, phase %v out %q", st.GamePhase, out)
+	}
+	// Signal start with explicit host
+	state2, _, _ := m.MatchInit(context.Background(), logger, nil, nil, nil)
+	state2 = m.MatchJoin(context.Background(), logger, nil, nil, nil, 0, state2, []runtime.Presence{newPresence("alice"), newPresence("bob")})
+	next, out = m.MatchSignal(context.Background(), logger, nil, nil, nil, 0, state2, "start:alice")
+	if next.(*RoundState).GamePhase != PhaseOpeningDiscard {
+		t.Fatalf("signal start:alice should succeed")
+	}
+	// Non-host via signal should fail
+	state3, _, _ := m.MatchInit(context.Background(), logger, nil, nil, nil)
+	state3 = m.MatchJoin(context.Background(), logger, nil, nil, nil, 0, state3, []runtime.Presence{newPresence("alice"), newPresence("bob")})
+	_, out = m.MatchSignal(context.Background(), logger, nil, nil, nil, 0, state3, "start:bob")
+	if out != "only host may start" {
+		t.Fatalf("non-host signal should fail, out %q", out)
+	}
 }

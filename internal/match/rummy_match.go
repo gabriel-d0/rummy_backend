@@ -136,12 +136,42 @@ func (m *RummyMatch) MatchLeave(ctx context.Context, logger runtime.Logger, db *
 }
 
 func (m *RummyMatch) MatchLoop(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, messages []runtime.MatchData) interface{} {
-	// Turn-based: no per-tick logic needed; messages are client opcodes handled via dispatcher.
-	// Day 26+ will route opcodes here.
-	if len(messages) > 0 {
-		logger.Debug("MatchLoop tick=%d messages=%d", tick, len(messages))
+	st, ok := state.(*RoundState)
+	if !ok {
+		logger.Error("MatchLoop bad state type %T", state)
+		return state
 	}
-	return state
+	// Handle start opcode (1) from host Seat 0 when in Waiting with 2-4 players.
+	// Day 24: minimal start, just transitions to OpeningDiscard; dealing is Day 25.
+	for _, msg := range messages {
+		op := msg.GetOpCode()
+		senderId := msg.GetUserId()
+		logger.Debug("MatchLoop tick=%d op=%d sender=%s len=%d", tick, op, senderId, len(messages))
+		if op == 1 { // START opcode (temporary, Day 26 will define stable opcodes)
+			if st.GamePhase != PhaseWaiting {
+				logger.Warn("Start rejected: game already started phase %v", st.GamePhase)
+				continue
+			}
+			if len(st.Players) < 2 {
+				logger.Warn("Start rejected: need 2 players, have %d", len(st.Players))
+				continue
+			}
+			seat := SeatOfPlayer(st.Players, PlayerId(senderId))
+			if seat != 0 {
+				logger.Warn("Start rejected: only host Seat 0 may start, sender seat %v", seat)
+				continue
+			}
+			// Transition to OpeningDiscard
+			st.GamePhase = PhaseOpeningDiscard
+			st.CurrentSeat = 0
+			st.TurnPhase = TurnMustDraw
+			logger.Info("Match started by host %s with %d players, phase OpeningDiscard seat 0", senderId, len(st.Players))
+			if dispatcher != nil {
+				_ = dispatcher.BroadcastMessage(1, []byte(`{"phase":"OpeningDiscard","currentSeat":0}`), nil, nil, true)
+			}
+		}
+	}
+	return st
 }
 
 func (m *RummyMatch) MatchTerminate(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, graceSeconds int) interface{} {
@@ -151,5 +181,31 @@ func (m *RummyMatch) MatchTerminate(ctx context.Context, logger runtime.Logger, 
 
 func (m *RummyMatch) MatchSignal(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, dispatcher runtime.MatchDispatcher, tick int64, state interface{}, data string) (interface{}, string) {
 	logger.Info("MatchSignal data=%s", data)
-	return state, ""
+	st, ok := state.(*RoundState)
+	if !ok {
+		return state, "bad state"
+	}
+	// Also allow signal-based start for local dev (e.g. nk.matchSignal or RPC)
+	// Expected data: "start:<hostUserId>" or "start"
+	if data == "start" || len(data) > 6 && data[:6] == "start:" {
+		if st.GamePhase != PhaseWaiting {
+			return state, "already started"
+		}
+		if len(st.Players) < 2 {
+			return state, "need 2 players"
+		}
+		// If host specified, verify it is Seat 0
+		if len(data) > 6 {
+			hostId := PlayerId(data[6:])
+			if SeatOfPlayer(st.Players, hostId) != 0 {
+				return state, "only host may start"
+			}
+		}
+		st.GamePhase = PhaseOpeningDiscard
+		st.CurrentSeat = 0
+		st.TurnPhase = TurnMustDraw
+		logger.Info("Match started via signal with %d players", len(st.Players))
+		return st, "started"
+	}
+	return st, ""
 }

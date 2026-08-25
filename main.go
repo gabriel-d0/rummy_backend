@@ -1,7 +1,8 @@
 // Rummy Backend — Nakama Go runtime entrypoint
-// Phase 1 Day 3 (rewritten): Minimal InitModule skeleton in Go.
+// Phase 1 Day 3 (rewritten) + Phase 4 Day 22: Minimal InitModule skeleton in Go
+// with authoritative match registration.
 // This replaces the previous TypeScript runtime per user request to migrate
-// to Go. It intentionally contains no game rules yet — only proves the
+// to Go. It intentionally contains minimal game rules yet — only proves the
 // Go plugin toolchain (go build --buildmode=plugin → backend.so → Nakama) works.
 // All gameplay logic will live under internal packages per AGENTS.md:133-159.
 // See docs/project-baseline.md for language decision amendment.
@@ -14,6 +15,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/gabriel-d0/rummy_backend/internal/match"
 	"github.com/heroiclabs/nakama-common/runtime"
 )
 
@@ -35,9 +37,15 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 	}
 
 	logger.Info("Rummy backend RPCs registered: health, version")
-	logger.Info("Rummy backend skeletal Go module loaded — no match handlers yet (Day 5)")
 
-	// No match handlers registered yet — Day 5 will add authoritative match.
+	// Register authoritative match handler (Day 22). The match name "rummy"
+	// is the stable ID clients use via nk.matchCreate / match join.
+	if err := initializer.RegisterMatch("rummy", match.NewRummyMatch); err != nil {
+		logger.Error("Failed to register rummy match: %v", err)
+		return err
+	}
+	logger.Info("Rummy backend match registered: rummy")
+	logger.Info("Rummy backend skeletal Go module loaded — Day 22 match skeleton registered (full lobby Day 23)")
 
 	return nil
 }

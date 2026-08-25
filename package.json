@@ -1,0 +1,25 @@
+{
+  "name": "rummy_backend",
+  "version": "0.1.0",
+  "description": "Romanian Tile Rummy — Nakama authoritative backend (TypeScript)",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc && mkdir -p nakama/data/modules && cp build/index.js nakama/data/modules/index.js && mkdir -p nakama/data/modules/build && cp build/index.js nakama/data/modules/build/index.js",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf build nakama/data/modules/index.js nakama/data/modules/build",
+    "test": "echo \"No tests yet — Day 3 skeleton\" && exit 0"
+  },
+  "keywords": ["nakama", "rummy", "typescript"],
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "nakama-runtime": "github:heroiclabs/nakama-common#master"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

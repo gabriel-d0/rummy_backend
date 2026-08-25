@@ -5,12 +5,14 @@ package meld
 import (
 	"fmt"
 	"sort"
+
+	"github.com/gabriel-d0/rummy_backend/internal/rules/tile"
 )
 
 // ValidateRun checks a meld claimed to be a run.
-// It expects KindRun, >=3 tiles, same colour, consecutive ranks.
-// Handles low Ace 1-2-3 (as 1,2,3) and high Ace 12-13-1 (as 12,13,14)
-// per docs/rules-decisions.md:1.3; 13-1-2 is invalid (Ace in middle).
+// It expects KindRun, >=3 tiles, same colour, consecutive ranks, with
+// explicit joker reps (same colour, gap filling) and real>=2*joker ratio
+// per docs/rules-decisions.md:1.3. Handles low Ace 1-2-3 and high Ace 12-13-1.
 func ValidateRun(m Meld) error {
 	if m.Kind != KindRun {
 		return &ValidationError{Code: ErrCodeInvalidKind, Field: "kind", Message: fmt.Sprintf("meld %q not a run (kind %q)", m.ID, m.Kind)}
@@ -18,26 +20,90 @@ func ValidateRun(m Meld) error {
 	if len(m.Tiles) < 3 {
 		return &ValidationError{Code: ErrCodeInvalidSize, Field: "tiles", Message: fmt.Sprintf("run %q must have >=3 tiles, got %d", m.ID, len(m.Tiles))}
 	}
-	if len(m.JokerReps) != 0 {
-		return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "jokerReps", Message: fmt.Sprintf("run %q has jokers, use ValidateRunWithJoker (Day 52)", m.ID)}
+	// Count real vs joker and check ratio real>=2*joker
+	realCount, jokerCount := 0, 0
+	for _, t := range m.Tiles {
+		if t.IsJoker {
+			jokerCount++
+		} else {
+			realCount++
+		}
 	}
-	// All tiles must be numbered and same colour
-	colour := m.Tiles[0].Colour
+	if realCount < 2*jokerCount {
+		return &ValidationError{Code: ErrCodeInvalidSize, Field: "jokerReps", Message: fmt.Sprintf("run %q ratio real %d must be >=2*joker %d", m.ID, realCount, jokerCount)}
+	}
+	// Determine run colour from first real tile (ratio ensures at least 1 real)
+	var colour tile.Colour
+	foundReal := false
+	for _, t := range m.Tiles {
+		if !t.IsJoker {
+			colour = t.Colour
+			foundReal = true
+			break
+		}
+	}
+	if !foundReal {
+		// All jokers not allowed by ratio, but pick first rep's colour for error
+		for _, t := range m.Tiles {
+			if t.IsJoker {
+				if rep, ok := m.JokerReps[t.ID]; ok {
+					colour = rep.Colour
+					foundReal = true
+					break
+				}
+			}
+		}
+		if !foundReal {
+			return &ValidationError{Code: ErrCodeRankMismatch, Field: "colour", Message: fmt.Sprintf("run %q has no real tile to determine colour", m.ID)}
+		}
+	}
 	if !colour.IsValid() {
 		return &ValidationError{Code: ErrCodeRankMismatch, Field: "colour", Message: fmt.Sprintf("run %q invalid colour %v", m.ID, colour)}
 	}
 	ranks := make([]int, 0, len(m.Tiles))
 	for _, t := range m.Tiles {
+		var effColour tile.Colour
+		var effRank tile.Rank
 		if t.IsJoker {
-			return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "tiles", Message: fmt.Sprintf("run %q has joker %v", m.ID, t.ID)}
+			rep, ok := m.JokerReps[t.ID]
+			if !ok {
+				return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "jokerReps", Message: fmt.Sprintf("run %q joker %v missing rep", m.ID, t.ID)}
+			}
+			if rep.IsJoker {
+				return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "jokerReps", Message: fmt.Sprintf("run %q joker %v rep cannot be joker", m.ID, t.ID)}
+			}
+			if !rep.Colour.IsValid() || !rep.Rank.IsValid() {
+				return &ValidationError{Code: ErrCodeRankMismatch, Field: "jokerReps", Message: fmt.Sprintf("run %q joker %v rep invalid", m.ID, t.ID)}
+			}
+			effColour = rep.Colour
+			effRank = rep.Rank
+		} else {
+			if !t.Rank.IsValid() {
+				return &ValidationError{Code: ErrCodeRankMismatch, Field: "rank", Message: fmt.Sprintf("run %q invalid rank %v", m.ID, t.Rank)}
+			}
+			effColour = t.Colour
+			effRank = t.Rank
 		}
-		if t.Colour != colour {
-			return &ValidationError{Code: "colour_mismatch", Field: "colour", Message: fmt.Sprintf("run %q colour %v vs %v", m.ID, t.Colour, colour)}
+		if effColour != colour {
+			return &ValidationError{Code: "colour_mismatch", Field: "colour", Message: fmt.Sprintf("run %q colour %v vs %v", m.ID, effColour, colour)}
 		}
-		if !t.Rank.IsValid() {
-			return &ValidationError{Code: ErrCodeRankMismatch, Field: "rank", Message: fmt.Sprintf("run %q invalid rank %v", m.ID, t.Rank)}
+		ranks = append(ranks, int(effRank))
+	}
+	// Validate JokerReps doesn't contain rep for non-joker
+	for jid := range m.JokerReps {
+		found := false
+		for _, t := range m.Tiles {
+			if t.ID == jid {
+				found = true
+				if !t.IsJoker {
+					return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "jokerReps", Message: fmt.Sprintf("run %q rep for non-joker %v", m.ID, jid)}
+				}
+				break
+			}
 		}
-		ranks = append(ranks, int(t.Rank))
+		if !found {
+			return &ValidationError{Code: ErrCodeJokerNotAllowed, Field: "jokerReps", Message: fmt.Sprintf("run %q rep for non-existent tile %v", m.ID, jid)}
+		}
 	}
 	sort.Ints(ranks)
 	// Check low-Ace consecutive (1,2,3 ...) — already sorted as 1,2,3

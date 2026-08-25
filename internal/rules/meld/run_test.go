@@ -78,14 +78,20 @@ func TestValidateRunRejectsSameColourAndLength(t *testing.T) {
 }
 
 func TestValidateRunRejectsJoker(t *testing.T) {
+	// Day 52: joker with valid rep is now allowed
 	j := tile.MustJoker("j1")
 	m, _ := New("m1", KindRun, []tile.TileInstance{
 		tile.MustTile("t1", tile.Red, 5),
 		tile.MustTile("t2", tile.Red, 6),
 		j,
 	}, map[tile.TileInstanceId]tile.TileInstance{"j1": tile.MustTile("rep", tile.Red, 7)})
-	if err := ValidateRun(m); err == nil {
-		t.Fatalf("joker should be rejected by basic ValidateRun")
+	if err := ValidateRun(m); err != nil {
+		t.Fatalf("joker with valid rep should now pass (Day 52), got %v", err)
+	}
+	// Missing rep should still fail
+	m2 := Meld{ID: "m2", Kind: KindRun, Tiles: []tile.TileInstance{tile.MustTile("t1", tile.Red, 5), tile.MustTile("t2", tile.Red, 7), j}, JokerReps: map[tile.TileInstanceId]tile.TileInstance{}}
+	if err := ValidateRun(m2); err == nil {
+		t.Fatalf("joker missing rep should fail")
 	}
 }
 

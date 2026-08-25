@@ -1,8 +1,8 @@
 # Rummy Backend — Developer Scripts (Go + Docker)
-# Phase 1 Day 4: start, stop, logs, clean/reset, build, test, lint, type-check, format
+# Phase 1 Day 4+7: start, stop, logs, clean/reset, build, test, lint, type-check, format + smoke
 # Usage: `make help` for list; all targets are explicit and non-magic per Handmade Hero.
 
-.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt test tidy health check
+.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt fmt-check test tidy health smoke check
 
 # Default: show help
 help:
@@ -30,6 +30,7 @@ help:
 	@echo "  make tidy        - go mod tidy"
 	@echo "  make check       - vet + fmt-check + test (CI baseline)"
 	@echo "  make health      - curl health: console 200, device auth + RPC health"
+	@echo "  make smoke       - full smoke: DB+nakama healthy, runtime loaded, DB conn, console+RPC (scripts/smoke.sh)"
 	@echo ""
 
 # --- Docker ---
@@ -103,3 +104,6 @@ health:
 	if [ -z "$$TOKEN" ]; then echo "auth failed"; exit 1; fi && \
 	echo "token $${#TOKEN} chars" && \
 	curl -s -X POST "http://127.0.0.1:7350/v2/rpc/health" -H "Authorization: Bearer $$TOKEN" --data '""' | python3 -m json.tool | head -n 20
+
+smoke:
+	./scripts/smoke.sh

@@ -81,6 +81,7 @@ func TestValidateSetRejectsInvalidSize(t *testing.T) {
 }
 
 func TestValidateSetRejectsJoker(t *testing.T) {
+	// Day 46: joker with valid rep is now allowed; without rep should fail at New
 	j := tile.MustJoker("j1")
 	rep := tile.MustTile("rep", tile.Black, 5)
 	m, _ := New("m1", KindSet, []tile.TileInstance{
@@ -88,8 +89,16 @@ func TestValidateSetRejectsJoker(t *testing.T) {
 		tile.MustTile("t2", tile.Yellow, 5),
 		j,
 	}, map[tile.TileInstanceId]tile.TileInstance{"j1": rep})
-	if err := ValidateSet(m); err == nil {
-		t.Fatalf("joker should be rejected by basic ValidateSet")
+	if err := ValidateSet(m); err != nil {
+		t.Fatalf("joker with valid rep should now pass (Day 46), got %v", err)
+	}
+	// Missing rep should fail at New
+	if _, err := New("m1", KindSet, []tile.TileInstance{
+		tile.MustTile("t1", tile.Red, 5),
+		tile.MustTile("t2", tile.Yellow, 5),
+		j,
+	}, nil); err == nil {
+		t.Fatalf("joker without rep should fail")
 	}
 }
 

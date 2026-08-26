@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import { flip } from 'svelte/animate';
+	import { fade } from 'svelte/transition';
 	import TopBar from '../components/TopBar.svelte';
 	import TableBoard from '../components/TableBoard.svelte';
 	import Rack from '../components/Rack.svelte';
@@ -237,12 +239,18 @@
 						{:else}
 							<div class="mt-2 space-y-2">
 								{#each availableMatches as m (m.matchId)}
-									<div class="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2">
+									<div
+										animate:flip={{ duration: 300 }}
+										in:fade={{ duration: 200 }}
+										class="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2"
+									>
 										<div>
 											<div class="font-mono text-xs font-bold text-white">
 												{m.matchId.slice(0, 8)}…
 											</div>
-											<div class="text-[10px] text-white/60">{m.label} • {m.size}/4 jucători</div>
+											<div class="text-[10px] text-white/60">
+												{m.label || 'rummy'} • {m.size}/4 jucători
+											</div>
 										</div>
 										<button
 											onclick={() => handleJoinListed(m.matchId)}

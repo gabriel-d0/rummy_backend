@@ -1,5 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { createSocket, getSocket } from './socket';
+import { getClient } from './client';
+import { authStore } from './auth';
 
 // Day 21 — Match create/join — Svelte writable matchId + rummy_matchId persistence + socket.createMatch/joinMatch
 
@@ -110,6 +112,30 @@ export async function leaveMatch(): Promise<void> {
 		}
 	}
 	clearMatchId();
+}
+
+export type AvailableMatch = { matchId: string; label: string; size: number };
+
+export async function listAvailableMatches(): Promise<AvailableMatch[]> {
+	try {
+		const session = get(authStore);
+		if (!session) return [];
+		const client = getClient();
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const result: any = await (client as any).listMatches(session, 10, true, 'rummy', 2, 4, '');
+		const matches = result?.matches ?? result?.result ?? [];
+		if (!Array.isArray(matches)) return [];
+		return matches
+			.map((m: Record<string, unknown>) => ({
+				matchId: (m.matchId ?? m.match_id ?? m.id ?? '') as string,
+				label: (m.label ?? '') as string,
+				size: (m.size ?? 0) as number
+			}))
+			.filter((m: AvailableMatch) => !!m.matchId);
+	} catch (_err) {
+		void _err;
+		return [];
+	}
 }
 
 // For tests: reset singleton

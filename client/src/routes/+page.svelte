@@ -12,7 +12,9 @@
 		getMatchId,
 		getStoredMatchId,
 		createMatch,
-		joinMatch
+		joinMatch,
+		listAvailableMatches,
+		type AvailableMatch
 	} from '$lib/nakama/match';
 	import { socketStore } from '$lib/nakama/socket';
 	import { reconnect } from '$lib/nakama/reconnect';
@@ -25,6 +27,8 @@
 	let isAuthenticating = $state(true);
 	let isCreating = $state(false);
 	let isJoining = $state(false);
+	let availableMatches = $state<AvailableMatch[]>([]);
+	let isListing = $state(false);
 
 	const isAuthed = $derived($authStore !== null);
 	const matchId = $derived($matchStore ?? getStoredMatchId() ?? null);
@@ -40,25 +44,52 @@
 	const stockCount = $derived(priv?.stockCount ?? pub?.stockCount ?? 0);
 	const discardLen = $derived(priv?.discardRow.length ?? pub?.discardRow.length ?? 0);
 
-	onMount(async () => {
-		// try to authenticate with stored deviceId, fallback to device auth
+	async function refreshMatches() {
+		if (!$authStore) return;
+		if (priv || pub) return; // don't poll when in game
+		isListing = true;
 		try {
-			if (!$authStore) {
-				await authenticate(username || undefined);
-			}
-		} catch (err) {
-			authError = (err as Error)?.message ?? 'Auth failed';
+			availableMatches = await listAvailableMatches();
+		} catch (_err) {
+			void _err;
 		} finally {
-			isAuthenticating = false;
+			isListing = false;
 		}
-		// try to reconnect to last match
-		const last = getStoredMatchId() ?? getMatchId();
-		if (last && $authStore) {
+	}
+
+	onMount(() => {
+		(async () => {
+			// try to authenticate with stored deviceId, fallback to device auth
 			try {
-				await reconnect();
-			} catch (_err) {
-				void _err;
+				if (!$authStore) {
+					await authenticate(username || undefined);
+				}
+			} catch (err) {
+				authError = (err as Error)?.message ?? 'Auth failed';
+			} finally {
+				isAuthenticating = false;
 			}
+			// try to reconnect to last match
+			const last = getStoredMatchId() ?? getMatchId();
+			if (last && $authStore) {
+				try {
+					await reconnect();
+				} catch (_err) {
+					void _err;
+				}
+			}
+			// initial poll
+			refreshMatches();
+		})();
+		// poll available matches in lobby
+		const interval = setInterval(refreshMatches, 2000);
+		return () => clearInterval(interval);
+	});
+
+	// also refresh when auth changes to lobby
+	$effect(() => {
+		if (isAuthed && !priv && !pub) {
+			refreshMatches();
 		}
 	});
 
@@ -89,6 +120,11 @@
 		} finally {
 			isJoining = false;
 		}
+	}
+
+	async function handleJoinListed(id: string) {
+		joinIdInput = id;
+		await handleJoin();
 	}
 
 	function handleCopyMatchId() {
@@ -180,26 +216,53 @@
 							<span class="ml-2 text-white/40">○ neconectat</span>
 						{/if}
 					</p>
-					<div class="mt-3 flex flex-wrap gap-2">
+					<!-- Primary: one click create -->
+					<div class="mt-4">
 						<button
 							onclick={handleCreate}
 							disabled={isCreating}
-							class="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-400 disabled:opacity-50"
-							>{isCreating ? 'Se creează…' : 'Creează masă (2-4 jucători)'}</button
+							class="w-full rounded-2xl bg-emerald-500 px-6 py-4 text-lg font-black text-white shadow-lg hover:bg-emerald-400 disabled:opacity-50"
+							>{isCreating ? 'Se creează…' : '＋ Creează cameră nouă'}</button
 						>
-						<div class="flex gap-1">
-							<input
-								bind:value={joinIdInput}
-								placeholder="ID masă (ex: mock-match)"
-								class="w-48 rounded-xl bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
-							/>
+						<p class="mt-2 text-center text-xs text-white/60">
+							2-4 jucători • primul creează, ceilalți văd camera instant la “Camere disponibile”
+						</p>
+					</div>
+					<!-- Available rooms list — the simple path: no typing -->
+					<div class="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+						<div class="flex items-center justify-between">
+							<div class="text-xs font-bold tracking-widest text-white/80">CAMERE DISPONIBILE</div>
 							<button
-								onclick={handleJoin}
-								disabled={isJoining}
-								class="rounded-xl bg-white px-4 py-2 text-sm font-bold text-black hover:bg-white/90 disabled:opacity-50"
-								>Alătură-te</button
+								onclick={refreshMatches}
+								class="text-[10px] text-white/60 underline hover:text-white">reîmprospătează</button
 							>
 						</div>
+						{#if isListing}
+							<div class="mt-2 text-xs text-white/60">Se caută camere…</div>
+						{:else if availableMatches.length === 0}
+							<div class="mt-2 text-xs text-white/60">
+								Nicio cameră deschisă — creează una nouă mai sus.
+							</div>
+						{:else}
+							<div class="mt-2 space-y-2">
+								{#each availableMatches as m (m.matchId)}
+									<div class="flex items-center justify-between rounded-lg bg-white/10 px-3 py-2">
+										<div>
+											<div class="font-mono text-xs font-bold text-white">
+												{m.matchId.slice(0, 8)}…
+											</div>
+											<div class="text-[10px] text-white/60">{m.label} • {m.size}/4 jucători</div>
+										</div>
+										<button
+											onclick={() => handleJoinListed(m.matchId)}
+											disabled={isJoining}
+											class="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-white/90 disabled:opacity-50"
+											>Intră</button
+										>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 					{#if matchId}
 						<div class="mt-3 flex items-center gap-2 text-xs text-white/80">
@@ -220,6 +283,22 @@
 					{#if matchError}
 						<div class="mt-2 text-xs text-red-300">{matchError}</div>
 					{/if}
+					<details class="mt-3 text-xs text-white/40">
+						<summary class="cursor-pointer underline">Avansat — alătură-te manual cu ID</summary>
+						<div class="mt-2 flex gap-1">
+							<input
+								bind:value={joinIdInput}
+								placeholder="ID masă (ex: abc123)"
+								class="w-48 rounded-xl bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+							/>
+							<button
+								onclick={handleJoin}
+								disabled={isJoining}
+								class="rounded-xl bg-white px-4 py-2 text-sm font-bold text-black hover:bg-white/90 disabled:opacity-50"
+								>Alătură-te</button
+							>
+						</div>
+					</details>
 					<div class="mt-3 text-xs text-white/50">
 						Demo-uri izolate (fără server): <a href={resolve('/demo/sync')} class="underline"
 							>sync</a
@@ -286,8 +365,49 @@
 				{/if}
 			</div>
 
+			{#if isPlaying || isOpening || gamePhase === 'RoundComplete'}
+				<!-- Talon (stock) — dispăruse, acum vizibil -->
+				<div class="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+					<div
+						class="grid h-16 w-12 place-items-center rounded-lg bg-[#c9a86a] text-center text-[10px] leading-none font-black text-[#3e2a10] shadow"
+					>
+						<span>TALON</span><span class="text-[14px] leading-none">{stockCount}</span>
+					</div>
+					<div class="text-xs text-white/80">
+						<div class="font-bold text-white">Talon • {stockCount} piese</div>
+						<div class="text-[11px] text-white/60">
+							Aruncări: {discardLen} • Tu Seat {mySeat} • Rând Seat {currentSeat}
+						</div>
+					</div>
+				</div>
+			{/if}
+			<!-- Always show TableBoard/Rack for Day 16 layout tests, but in lobby they are demo fallback -->
 			<TableBoard />
 			<Rack />
+			{#if isWaiting}
+				<div class="rounded-2xl border border-dashed border-white/20 bg-black/10 p-6 text-center">
+					<div class="text-sm font-bold text-white">
+						Masa e gata — aștepți START de la host (Seat 0)
+					</div>
+					<p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-white/60">
+						Când hostul apasă <span class="font-bold text-emerald-300">START</span> vei primi 14 cărți
+						(host 15) și talonul va apărea. Cele 11 cărți de mai sus sunt demo fallback, nu mâna reală.
+					</p>
+				</div>
+			{:else if !priv && !pub}
+				<div
+					class="rounded-2xl border border-white/10 bg-black/10 p-4 text-center text-xs leading-relaxed text-white/60"
+				>
+					<div class="font-bold text-white">Cum joci real cu alt browser:</div>
+					1) Apasă<span class="font-bold text-emerald-300">Creează cameră nouă</span> sus → primești
+					un ID. 2) Pe al doilea browser (Incognito) vezi instant camera în “Camere disponibile” →
+					apasă
+					<span class="font-bold text-white">Intră</span> (fără să tastezi
+					<code class="bg-black/30 px-1">xyz</code>). 3) Host apasă
+					<span class="font-bold text-emerald-300">START</span> în bara neagră sus — amândoi primiți 14/15
+					cărți și talonul, nu 11 demo.
+				</div>
+			{/if}
 		</div>
 		<aside class="hidden w-[300px] shrink-0 flex-col gap-3 lg:flex">
 			<div class="rounded-2xl border border-white/10 bg-black/20 p-3">

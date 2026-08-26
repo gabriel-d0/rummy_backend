@@ -8,7 +8,7 @@ import {
 import { OpServerState, OpServerStatePublic } from '../nakama/protocol';
 import { setMatchDataHandler } from '../nakama/socket';
 
-// Day 22-23 — Game store — private + public — Svelte writable Private/Public Snapshot, onPrivateSnapshot/onPublicSnapshot, lastPrivate, derived isMyTurn, TableBoard subscribes
+// Day 22-25 — Game store — private + public + reconnection — Svelte writable Private/Public Snapshot, onPrivateSnapshot/onPublicSnapshot, lastPrivate, privateBySeat, derived isMyTurn, TableBoard subscribes, socket.onDisconnect keeps matchId
 
 export const privateStore = writable<PrivateSnapshot | null>(null);
 export const publicStore = writable<PublicSnapshot | null>(null);
@@ -16,11 +16,15 @@ export const publicStore = writable<PublicSnapshot | null>(null);
 // lastPrivate mirrors privateStore but also kept as plain variable for quick sync access and reconnection persistence
 export let lastPrivate: PrivateSnapshot | null = null;
 
+// Day 25 — per-seat private snapshot map for reconnection + localStorage rummy_lastPrivate:${seat}
+export const privateBySeat: Map<number, PrivateSnapshot> = new Map();
+
 export function onPrivateSnapshot(snap: unknown): boolean {
 	if (!isValidPrivateSnapshot(snap)) return false;
 	const ps = snap as PrivateSnapshot;
 	lastPrivate = ps;
 	privateStore.set(ps);
+	privateBySeat.set(ps.ownSeat, ps);
 	// also update public part from private (private contains public fields)
 	publicStore.set({
 		v: ps.v,
@@ -39,6 +43,42 @@ export function onPrivateSnapshot(snap: unknown): boolean {
 		void _err;
 	}
 	return true;
+}
+
+export function getLastPrivateForSeat(seat: number): PrivateSnapshot | null {
+	if (privateBySeat.has(seat)) return privateBySeat.get(seat) as PrivateSnapshot;
+	try {
+		const raw = localStorage.getItem(`rummy_lastPrivate:${seat}`);
+		if (raw) {
+			const parsed = JSON.parse(raw) as unknown;
+			if (isValidPrivateSnapshot(parsed)) {
+				const ps = parsed as PrivateSnapshot;
+				privateBySeat.set(seat, ps);
+				return ps;
+			}
+		}
+	} catch (_err) {
+		void _err;
+	}
+	return null;
+}
+
+export function getStoredMatchIdSafe(): string | null {
+	try {
+		return localStorage.getItem('rummy_matchId');
+	} catch (_err) {
+		void _err;
+		return null;
+	}
+}
+
+export function getStoredUserIdSafe(): string | null {
+	try {
+		return localStorage.getItem('rummy_userId') ?? localStorage.getItem('rummy_device_id');
+	} catch (_err) {
+		void _err;
+		return null;
+	}
 }
 
 export function onPublicSnapshot(snap: unknown): boolean {
@@ -120,6 +160,7 @@ export function _resetForTest(): void {
 	lastPrivate = null;
 	privateStore.set(null);
 	publicStore.set(null);
+	privateBySeat.clear();
 	try {
 		// clear persisted lastPrivate keys
 		for (let i = 0; i < 4; i++) {

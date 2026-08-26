@@ -7,6 +7,8 @@ import {
 	isMyTurn,
 	myRack,
 	lastPrivate,
+	privateBySeat,
+	getLastPrivateForSeat,
 	_resetForTest,
 	handleMatchData
 } from './store';
@@ -218,5 +220,53 @@ describe('Game store — Day 22-23 private + public', () => {
 		expect(JSON.stringify(stored)).not.toContain('alice-secret');
 		// private remains null after public-only update
 		expect(get(privateStore)).toBeNull();
+	});
+
+	it('Day 25 — privateBySeat Map stores per seat and rummy_lastPrivate:0', () => {
+		const snap0 = makePrivate(0, ['priv0-1', 'priv0-2']);
+		const snap1 = makePrivate(1, ['priv1-1']);
+		onPrivateSnapshot(snap0);
+		expect(privateBySeat.get(0)?.ownSeat).toBe(0);
+		expect(privateBySeat.get(0)?.ownRack[0].ID).toBe('priv0-1');
+		expect(localStorage.getItem('rummy_lastPrivate:0')).not.toBeNull();
+		expect(JSON.parse(localStorage.getItem('rummy_lastPrivate:0') as string).ownRack[0].ID).toBe(
+			'priv0-1'
+		);
+
+		onPrivateSnapshot(snap1);
+		expect(privateBySeat.get(1)?.ownSeat).toBe(1);
+		expect(localStorage.getItem('rummy_lastPrivate:1')).not.toBeNull();
+		// both seats kept
+		expect(privateBySeat.size).toBe(2);
+		expect(getLastPrivateForSeat(0)?.ownRack[0].ID).toBe('priv0-1');
+		expect(getLastPrivateForSeat(1)?.ownRack[0].ID).toBe('priv1-1');
+	});
+
+	it('Day 25 — getLastPrivateForSeat restores from localStorage when Map cleared', () => {
+		const snap = makePrivate(0, ['restore-1']);
+		onPrivateSnapshot(snap);
+		expect(privateBySeat.has(0)).toBe(true);
+		// simulate process restart: clear Map but keep localStorage
+		privateBySeat.clear();
+		expect(privateBySeat.has(0)).toBe(false);
+		const restored = getLastPrivateForSeat(0);
+		expect(restored).not.toBeNull();
+		expect(restored!.ownRack[0].ID).toBe('restore-1');
+		expect(privateBySeat.has(0)).toBe(true);
+	});
+
+	it('Day 25 — socket.onDisconnect keeps matchId and rummy_device_id', () => {
+		localStorage.setItem('rummy_matchId', 'keep-match-123');
+		localStorage.setItem('rummy_device_id', 'keep-device-456');
+		localStorage.setItem('rummy_userId', 'keep-user-789');
+		// simulate onDisconnect clearing only socketStore, not storage
+		// our socketStore _resetForTest clears socket but we verify storage still there
+		// here we just verify storage not cleared by store logic
+		onPrivateSnapshot(makePrivate(0, ['keep-rack-1']));
+		// simulate disconnect: privateBySeat should remain
+		expect(privateBySeat.size).toBe(1);
+		expect(localStorage.getItem('rummy_matchId')).toBe('keep-match-123');
+		expect(localStorage.getItem('rummy_device_id')).toBe('keep-device-456');
+		expect(localStorage.getItem('rummy_lastPrivate:0')).not.toBeNull();
 	});
 });

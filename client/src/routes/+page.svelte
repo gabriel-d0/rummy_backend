@@ -7,25 +7,31 @@
 
 <div class="min-h-screen bg-[#0a2e1a] flex flex-col">
   <TopBar />
-  <div class="flex-1 flex flex-col gap-4 p-3 max-w-[1600px] w-full mx-auto">
-    <div class="rounded-2xl border border-white/10 p-6" style="background: {colors.felt}">
-      <h1 class="text-xl font-bold tracking-tight text-white" style="font-family: Inter, system-ui, sans-serif">
-        Rummy — SvelteKit Day 15
-      </h1>
-      <p class="mt-2 text-sm leading-relaxed text-white/70">
-        TopBar <code class="rounded bg-black/20 px-1 py-0.5 font-mono text-xs">REMI ETALAT MASA 1 • 4 JUCĂTORI</code>
-        <span style="font-family: 'JetBrains Mono', monospace"> — h-12 bg-black/90</span>
-      </p>
+  <div class="flex-1 flex flex-col lg:flex-row gap-3 p-3 max-w-[1600px] w-full mx-auto">
+    <div class="flex-1 flex flex-col gap-4 min-w-0">
+      <div class="rounded-2xl border border-white/10 p-6" style="background: {colors.felt}">
+        <h1 class="text-xl font-bold tracking-tight text-white" style="font-family: Inter, system-ui, sans-serif">
+          Rummy — SvelteKit Day 16
+        </h1>
+        <p class="mt-2 text-sm leading-relaxed text-white/70">
+          Visual layout <code class="rounded bg-black/20 px-1 py-0.5 font-mono text-xs">TopBar + TableBoard + Rack + Jurnal</code>
+          <span style="font-family: 'JetBrains Mono', monospace"> — 1280×800 & 375×667</span>
+        </p>
+      </div>
+
+      <TableBoard />
+      <Rack />
     </div>
-
-    <TableBoard />
-    <Rack />
-
-    <div class="rounded-2xl border border-white/10 bg-[#0f2a1a]/50 p-6">
-      <p class="text-sm text-white">TopBar + TableBoard + Rack — Day 15</p>
-      <p class="mt-2 inline-block rounded bg-black/40 px-2 py-1 font-mono text-xs text-white/70">
-        Day 15 • TopBar.svelte • TableBoard • Rack
-      </p>
+    <aside class="hidden lg:flex w-[300px] shrink-0 flex-col gap-3">
+      <div class="rounded-2xl bg-black/20 border border-white/10 p-3">
+        <h3 class="text-xs font-bold tracking-widest text-white/80">JURNAL DE JOC</h3>
+        <p class="mt-2 text-xs text-white/60">Journal placeholder — Day 16</p>
+      </div>
+    </aside>
+  </div>
+  <div class="lg:hidden px-3 pb-3">
+    <div class="rounded-2xl bg-black/20 border border-white/10 p-3">
+      <h3 class="text-xs font-bold tracking-widest text-white/80">JURNAL DE JOC</h3>
     </div>
   </div>
 </div>

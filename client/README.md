@@ -2,31 +2,100 @@
 
 Phaser 3 web client for Romanian Tile Rummy (Nakama authoritative, Go backend). This is the **Day 24+ optional client** per `AGENTS.md:812` and `docs/daily-log.md` Phase 12 — a minimal, maintainable test client that proves the protocol without copying Remi Online branding.
 
-**Current phase:** `Phase 1 — Foundation` (scaffolding only, no gameplay yet). See `client/docs/roadmap.md` for the full Handmade Hero incremental plan (one small vertical slice per day).
+**Current phase:** `Phase 1 — Foundation` through Day 5 `Local setup documentation` (scaffolding, Vite+TS+Phaser, Nakama JS `2.8.0`, lint/format `Day 4`, and this `Quick Start` with prerequisites, `VITE_NAKAMA_*` env, Docker startup, Console access, test execution). See `client/docs/roadmap.md` for the full Handmade Hero incremental plan (one small vertical slice per day).
 
-## Quick Start (local)
+## Prerequisites
+
+- **Node** `>=20` (`node --version` `20.x` or `22.x` LTS; `npm` `>=10`).
+- **Docker** `>=29` + `compose v5` — same as backend (`docker --version` `29.x`, `docker compose version` `v5.x`), tested on `darwin 25.6.0 arm64`.
+- **Go backend** running via `docker compose up --build -d` from repo root (see `../README.md` `Quick Start`).
+- No local `psql` needed — Postgres at `5433` via Docker.
+
+## Environment Variables
+
+Copy `client/.env.example` to `client/.env` (optional — `vite.config.ts` and `src/net/nakama.ts` have defaults via `import.meta.env?.VITE_* ?? "127.0.0.1:7350"`):
 
 ```bash
-# 1. Prerequisites: Node 20+ and Go backend running
-node --version   # >=20
-npm --version    # >=10
-docker compose up --build -d   # from repo root, starts Nakama 7350/7351 + Postgres 5433
-make smoke       # check Nakama healthy
-
-# 2. Install and run client
 cd client
-npm install
-npm run dev      # Vite dev server http://127.0.0.1:5173
-# open http://127.0.0.1:5173
-
-# 3. Play (2 browsers or 2 tabs)
-# - Alice: click "Create Match" (host, Seat 0, HasOpened false)
-# - Bob: click "Join Match" (Seat 1)
-# - Both see PrivateView.OwnRack vs PublicView counts (redaction)
-# - Use Draw / Discard / Meld / Extend / Pickup / Replace per docs/protocol.md
+cp .env.example .env   # optional, defaults are sane for local dev
+cat .env.example
+# VITE_NAKAMA_HOST=127.0.0.1
+# VITE_NAKAMA_PORT=7350
+# VITE_NAKAMA_KEY=defaultkey
+# VITE_NAKAMA_USE_SSL=false
+# VITE_DEV_PORT=5173
 ```
 
-**Backend API:** `http://127.0.0.1:7350` (device auth `defaultkey`), `ws://127.0.0.1:7350/ws` (Nakama JS `Client` + `Socket`), `http://127.0.0.1:7351` console `admin/password`.
+`VITE_NAKAMA_KEY` must be `defaultkey` for local Nakama (not `defaulthttpkey` — see `../README.md` `Troubleshooting` `Server key invalid`). Never commit `client/.env` (already in `client/.gitignore`).
+
+## Docker Startup (backend)
+
+From **repo root** (not `client/`):
+
+```bash
+# Build Go plugin and start DB + Nakama (once, ~10s for DB init)
+docker compose up --build -d
+
+# Verify
+docker compose ps                    # both healthy
+docker compose logs nakama --tail=30 | grep -E "Rummy|modules|Registered"
+# expect: Found runtime modules count 1 [rummy_backend.so]
+# expect: Registered Go runtime RPC function invocation id health/version
+# expect: Registered Go runtime Match creation function invocation name rummy
+make smoke   # from repo root — SMOKE PASSED (pg_isready, healthcheck, InitModule, console 200, RPC health)
+```
+
+Compose project is `rummy_backend` (`compose.yml:1` `name:`) to isolate from `tinybot`. Host ports `5433→5432` for Postgres, `7350→7350` API, `7351→7351` console.
+
+## Nakama Console Access
+
+- **URL:** `http://127.0.0.1:7351` — user `admin` password `password` (local `nakama/data/local.yml` `DEBUG` only).
+- **Health:** `docker inspect rummy_nakama --format '{{json .State.Health}}' | python3 -m json.tool` and `docker exec rummy_nakama /nakama/nakama healthcheck`.
+- **DB:** `docker compose exec postgres psql -U postgres -d nakama -c "SELECT * FROM migrate;"` or `make db-shell` from repo root.
+
+## Test Execution (client)
+
+```bash
+cd client
+npm install          # once (120 packages, 4s) — creates node_modules/ (ignored)
+npm run lint         # eslint src --ext .ts (Day 4, .eslintrc.json)
+npm run fmt          # prettier --write src (Day 4, .prettierrc)
+npm run typecheck    # tsc --noEmit (Day 4, tsconfig.json strict)
+npm run build        # tsc --noEmit && vite build (Day 4, outputs dist/)
+npm run dev          # Vite dev server http://127.0.0.1:5173 --host 127.0.0.1 --port 5173
+# open http://127.0.0.1:5173
+# check DevTools console: "Phaser 3 Rummy — Day 2 Vite + TypeScript + Phaser scaffold"
+```
+
+Or via root `Makefile` aliases (from repo root):
+
+```bash
+make client-lint       # cd client && npm run lint
+make client-typecheck  # cd client && npm run typecheck
+make client-build      # cd client && npm run build
+make client-fmt        # cd client && npm run fmt
+```
+
+All `make client-*` are `Day 4` deliverables and must be `0` before next day.
+
+## Quick Start (play)
+
+```bash
+# 1. Backend up (from repo root)
+docker compose up --build -d && make smoke
+
+# 2. Client dev (from client/)
+cd client && npm install && npm run dev
+# open http://127.0.0.1:5173
+
+# 3. Play (2 browsers or 2 tabs at http://127.0.0.1:5173)
+# - Alice: click "Create Match" (host, Seat 0, HasOpened false)
+# - Bob: click "Join Match" (Seat 1)
+# - Both see PrivateView.OwnRack vs PublicView counts (redaction per docs/protocol.md)
+# - Use Draw / Discard / Meld / Extend / Pickup / Replace per docs/state-machine.md
+```
+
+**Backend API for client:** `http://127.0.0.1:7350` (device auth `defaultkey` via `src/net/nakama.ts` `Client("127.0.0.1","7350","defaultkey")`), `ws://127.0.0.1:7350/ws` (`Client.createSocket`), `http://127.0.0.1:7351` console `admin/password`.
 
 ## Project Structure
 
@@ -78,7 +147,7 @@ See `docs/roadmap.md` Phase 5–8 for networking/state sync.
 
 ## Next Steps
 
-Per `client/docs/roadmap.md` Phase 1 Day 1: `npm init` + `phaser` + `vite` + minimal `Preload` scene that loads a single tile sprite and logs `InitModule` for `make dev` health check.
+Per `client/docs/roadmap.md` Phase 1 Day 5 done — `Quick Start` now covers prerequisites, `VITE_NAKAMA_*` env, `docker compose up --build -d`, Nakama Console `http://127.0.0.1:7351` `admin/password`, and `npm run lint`/`fmt`/`typecheck`/`build`/`dev`. Next is **Day 6 — Smoke test** (`client/docs/roadmap.md:15`): add `scripts/client-smoke.sh` or `make client-smoke` that verifies `npm run dev` serves `http://127.0.0.1:5173` `200`, `Preload` `complete`, and `nakama.ts` `Client` can `authenticateDevice` against `docker compose up` backend (like `make smoke` for Go).
 
 ---
 

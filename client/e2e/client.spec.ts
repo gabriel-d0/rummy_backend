@@ -82,10 +82,10 @@ test.describe("Rummy Phaser Client — smoke", () => {
     const subspacesOk = await page.evaluate(async () => {
       const mod = await import("/src/ui/LayoutManager.ts");
       const subs = mod.getSubspaces();
-      // Check that subspaces partition 1000x1000 with gutters
+      // Check that subspaces partition 1000x1000 with gutters — modern compact 132/56
       const hasAll = !!(subs.TopBar && subs.TableArea && subs.MeldArea && subs.DiscardRowArea && subs.PlayerRackArea && subs.ActionButtonsArea);
       const topBarOk = subs.TopBar.height === 80 && subs.TopBar.width === 1000 - 24;
-      const rackOk = subs.PlayerRackArea.height === 180;
+      const rackOk = subs.PlayerRackArea.height === 132 && subs.ActionButtonsArea.height === 56;
       return hasAll && topBarOk && rackOk;
     });
     expect(subspacesOk).toBeTruthy();

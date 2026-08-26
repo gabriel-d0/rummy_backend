@@ -177,23 +177,26 @@ export function onGameResize(scene: Phaser.Scene, cb: (subspaces: Subspaces) => 
   });
 }
 
-// 5. Debug helper — draw subspace bounds for visual verification
+// 5. Debug helper — draw subspace bounds for visual verification (Inter, readable)
 export function drawDebugSubspaces(scene: Phaser.Scene, subspaces: Subspaces, alpha = 0.04): void {
   const colors: Record<keyof Subspaces, number> = {
-    TopBar: 0xff0000,
-    TableArea: 0x00ff00,
-    MeldArea: 0x0000ff,
-    DiscardRowArea: 0xffff00,
-    PlayerRackArea: 0xff00ff,
-    ActionButtonsArea: 0x00ffff,
+    TopBar: 0xff6b6b,
+    TableArea: 0x2ecc71,
+    MeldArea: 0x3498db,
+    DiscardRowArea: 0xf1c40f,
+    PlayerRackArea: 0xe67e22,
+    ActionButtonsArea: 0x9b59b6,
   };
   for (const [name, rect] of Object.entries(subspaces) as [keyof Subspaces, Rect][]) {
-    const r = scene.add.rectangle(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width, rect.height, colors[name], alpha).setStrokeStyle(1, colors[name], 0.5);
+    const r = scene.add.rectangle(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width, rect.height, colors[name], alpha).setStrokeStyle(1.5, colors[name], 0.6);
     r.setData("isDebugSubspace", true);
-    const label = scene.add.text(rect.x + 4, rect.y + 4, name, {
-      fontFamily: "monospace",
-      fontSize: "8px",
+    const label = scene.add.text(rect.x + 6, rect.y + 6, name, {
+      fontFamily: "Inter, system-ui, sans-serif",
+      fontSize: "9px",
       color: "#ffffff",
+      fontStyle: "600",
+      backgroundColor: "#0a2e1a99",
+      padding: { x: 4, y: 2 },
     });
     label.setData("isDebugSubspace", true);
   }

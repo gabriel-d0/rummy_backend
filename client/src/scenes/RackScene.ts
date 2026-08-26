@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { discardSelected, meldSelected, renderRack, sortRack, clearSelected } from "../ui/Rack";
-import { getLayout } from "../ui/Layout";
+import { getSubspaces, GAME_SPACE } from "../ui/LayoutManager";
 import { subscribePrivateSnapshot, canPlayerAct, canDrawPrevious } from "../state/sync";
 import type { PrivateSnapshot } from "../state/snapshot";
 import {
@@ -13,22 +13,27 @@ import {
 import { sendMatchState } from "../net/protocol";
 import { createSocket, getStoredMatchId } from "../net/nakama";
 
-// Day 11 + Day 19: RackScene renders PrivateView.OwnRack only (redaction) with subspace layout
+// Day 11 + Day 19: RackScene renders PrivateView.OwnRack only (redaction) with proportional layout
 // Day 30: subscribes to PrivateSnapshot and re-renders OwnRack only (never foreign rack)
+// Fix: unified to GAME_SPACE getSubspaces, buttons in ActionButtonsArea with flex, no overlap
+
 export class RackScene extends Phaser.Scene {
   constructor() {
     super("RackScene");
   }
 
   private renderPrivateRack(snap: PrivateSnapshot): void {
-    const layout = getLayout(this.scale.width, this.scale.height);
+    const s = getSubspaces();
     const sorted = sortRack(snap.ownRack);
+    // Center within PlayerRackArea, using slot logic or centered
+    const area = s.PlayerRackArea;
     const totalW = sorted.length > 0 ? (sorted.length - 1) * 62 : 0;
-    const rackCenterX = layout.rack.x + layout.rack.w / 2;
-    const startX = rackCenterX - totalW / 2;
+    const centerX = area.x + area.width / 2;
+    const startX = centerX - totalW / 2;
+    const y = area.y + area.height / 2;
     renderRack(this, sorted, snap.ownSeat, {
       x: startX,
-      y: layout.rack.y + layout.rack.h / 2,
+      y,
       spacing: 62,
     });
   }
@@ -61,24 +66,40 @@ export class RackScene extends Phaser.Scene {
     this.setButtonEnabled(meldSetBtn, canMeld);
     if (drawBtn) this.setButtonEnabled(drawBtn, canDraw);
     if (drawPrevBtn) this.setButtonEnabled(drawPrevBtn, canPrev);
-    // Also log for e2e
     console.log(
       `Day 36 button states: discard=${canDiscard} meld=${canMeld} draw=${canDraw} prev=${canPrev} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
     );
   }
 
   create() {
-    const layout = getLayout(this.scale.width, this.scale.height);
+    const s = getSubspaces();
 
-    // Rack background fills rack subspace (wood 800x120 or full width on mobile, centered)
+    // Rack background fills PlayerRackArea (wood)
     this.add
-      .image(layout.rack.x + layout.rack.w / 2, layout.rack.y + layout.rack.h / 2, "rack")
-      .setDisplaySize(layout.rack.w, layout.rack.h);
+      .image(
+        s.PlayerRackArea.x + s.PlayerRackArea.width / 2,
+        s.PlayerRackArea.y + s.PlayerRackArea.height / 2,
+        "rack"
+      )
+      .setDisplaySize(s.PlayerRackArea.width, s.PlayerRackArea.height);
 
-    // Draw slot outlines for visual clarity (14 slots)
-    for (const slot of layout.rackSlots) {
+    // Draw slot outlines for visual clarity (14 slots) centered in PlayerRackArea
+    const slotW = 48;
+    const slotH = 80;
+    const n = 14;
+    const totalSlotW = n * slotW + (n - 1) * 6;
+    const slotStartX = s.PlayerRackArea.x + (s.PlayerRackArea.width - totalSlotW) / 2;
+    const slotY = s.PlayerRackArea.y + (s.PlayerRackArea.height - slotH) / 2;
+    for (let i = 0; i < n; i++) {
       this.add
-        .rectangle(slot.x + slot.w / 2, slot.y + slot.h / 2, slot.w, slot.h, 0x3d2817, 0)
+        .rectangle(
+          slotStartX + i * (slotW + 6) + slotW / 2,
+          slotY + slotH / 2,
+          slotW,
+          slotH,
+          0x3d2817,
+          0
+        )
         .setStrokeStyle(1, 0x5a3d1a, 0.5);
     }
 
@@ -89,79 +110,77 @@ export class RackScene extends Phaser.Scene {
       { ID: "mock-blue-5", Colour: 3, Rank: 5, IsJoker: false },
     ];
     const mockRack = sortRack(unsorted);
-    // Render centered within rack subspace, not at fixed 100,700
-    const totalW = mockRack.length > 0 ? (mockRack.length - 1) * 62 : 0;
-    const rackCenterX = layout.rack.x + layout.rack.w / 2;
-    const startX = rackCenterX - totalW / 2;
-    renderRack(this, mockRack, 0, { x: startX, y: layout.rack.y + layout.rack.h / 2, spacing: 62 });
-
-    // Day 17: dragstart
-    this.input.on("dragstart", (_pointer: any, gameObject: any) => {
-      const tileId = gameObject.getData("tileId");
-      console.log(`dragstart ${tileId}`);
+    const mockArea = s.PlayerRackArea;
+    const mockTotalW = mockRack.length > 0 ? (mockRack.length - 1) * 62 : 0;
+    const mockCenterX = mockArea.x + mockArea.width / 2;
+    const mockStartX = mockCenterX - mockTotalW / 2;
+    renderRack(this, mockRack, 0, {
+      x: mockStartX,
+      y: mockArea.y + mockArea.height / 2,
+      spacing: 62,
     });
 
-    // Day 19: Discard button inside rack subspace top-right, not overlapping
-    // Day 38: Opening discard — when OpeningDiscard + ownSeat==currentSeat + ownRack 15, sends OpClientDiscard 2 {"tileId": selectedId}
-    const btnX = layout.rack.x + layout.rack.w - 50;
-    const btnY = layout.rack.y - 14;
-    const discardBtn = this.add
-      .text(btnX, btnY, "[Discard]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    // Day 17: dragstart — store dragged tileId
+    this.input.on("dragstart", (_pointer: unknown, gameObject: unknown) => {
+      const g = gameObject as { getData?: (k: string) => unknown };
+      const tileId = g?.getData?.("tileId");
+      console.log(`dragstart ${String(tileId)}`);
+    });
+
+    // Also handle drag for cross-scene: on drag, bring tile to top, on dragend check drop zone
+    this.input.on(
+      "drag",
+      (_pointer: unknown, gameObject: unknown, dragX: number, dragY: number) => {
+        const g = gameObject as Phaser.GameObjects.Image;
+        g.x = dragX;
+        g.y = dragY;
+      }
+    );
+
+    this.input.on("dragend", (pointer: unknown, gameObject: unknown) => {
+      const g = gameObject as { getData?: (k: string) => unknown; x: number; y: number };
+      const tileId = g?.getData?.("tileId");
+      // Check if dropped in drop zone (which is in TableScene at GAME_SPACE.width/2, dropY)
+      // For cross-scene, we check pointer position against drop zone bounds in GAME_SPACE
+      const p = pointer as { x: number; y: number };
+      // Drop zone is at GAME_SPACE 600x44 centered at dropY+22
+      // We can get drop zone bounds from LayoutManager: it's below DiscardRowArea
+      const dropY = s.DiscardRowArea.y + s.DiscardRowArea.height + 16;
+      const dropH = 44;
+      const dropX = GAME_SPACE.width / 2;
+      const dropW = 600;
+      const inDropZone =
+        p.x >= dropX - dropW / 2 &&
+        p.x <= dropX + dropW / 2 &&
+        p.y >= dropY &&
+        p.y <= dropY + dropH;
+      if (inDropZone) {
+        console.log(`drop ${String(tileId)} at dropZone — RackScene dragend`);
+        // Also emit a game event so TableScene can handle if needed
+        this.game.events.emit("rummy:drop", { tileId, x: p.x, y: p.y });
+      }
+      // Snap back to rack if not dropped in zone — re-render from latest snapshot
+      // For mock, just log
+    });
+
+    // ActionButtonsArea: flex layout for 5 buttons without overlap, centered, no info overlap
+    const ab = s.ActionButtonsArea;
+    const btnY = ab.y + ab.height / 2;
+    // Flex: distribute 5 buttons evenly in ActionButtonsArea
+    const btnCount = 5;
+    const btnW = 110;
+    const gap = (ab.width - btnCount * btnW) / (btnCount + 1);
+    const btnXs = Array.from(
+      { length: btnCount },
+      (_, i) => ab.x + gap + btnW / 2 + i * (btnW + gap)
+    );
+
     // Track latest private snapshot for opening discard handler
     let latestPrivate: PrivateSnapshot | null = null;
-    discardBtn.on("pointerdown", async () => {
-      const res = discardSelected();
-      if (!res) return;
-      // Day 38: if in OpeningDiscard and ownRack 15, send to server
-      if (
-        latestPrivate &&
-        latestPrivate.gamePhase === "OpeningDiscard" &&
-        latestPrivate.ownSeat === latestPrivate.currentSeat &&
-        latestPrivate.ownRack.length === 15
-      ) {
-        // Validate tile is in ownRack (discardSelected already ensures selected is from rack via UI, but we double-check via snapshot)
-        const inRack = latestPrivate.ownRack.some((t) => t.ID === res.tileId);
-        if (!inRack) {
-          console.log(`discard failed: tile ${res.tileId} not in ownRack 15`);
-          return;
-        }
-        try {
-          const sock = await createSocket();
-          const matchId = getStoredMatchId();
-          if (!matchId) {
-            console.log("discard failed: no matchId");
-            return;
-          }
-          await sendMatchState(
-            sock,
-            matchId,
-            OpClientDiscard,
-            { tileId: res.tileId },
-            `req-discard-${Date.now()}`
-          );
-          console.log(`sent OpClientDiscard opening ${res.tileId} — Day 38`);
-          clearSelected();
-        } catch (e) {
-          console.log("discard failed", e);
-        }
-        return;
-      }
-      // For non-opening (normal discard) just log for now (Day 42 will send)
-      console.log(
-        `discardSelected success: ${res.tileId} (not OpeningDiscard — Day 38 only logs, Day 42 will send)`
-      );
-    });
-    // Day 39: Draw button — visible only if Playing MustDraw and ownSeat==currentSeat, sends OpClientDrawStock 3 {}
+
+    // Day 39: Draw button — at btnXs[0]
     const drawBtn = this.add
-      .text(btnX - 310, btnY, "[Draw]", {
+      .text(btnXs[0], btnY, "[Draw]", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#00ff00",
@@ -191,9 +210,9 @@ export class RackScene extends Phaser.Scene {
       }
     });
 
-    // Day 40: DrawPrevious button — visible only if HasOpened and DiscardRow not empty and not IsOpeningDiscard, sends OpClientDrawPreviousDiscard 4 {}
+    // Day 40: DrawPrevious button — at btnXs[1]
     const drawPrevBtn = this.add
-      .text(btnX - 410, btnY, "[Prev]", {
+      .text(btnXs[1], btnY, "[Prev]", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#00ff00",
@@ -229,9 +248,9 @@ export class RackScene extends Phaser.Scene {
       }
     });
 
-    // Day 20: Meld buttons — validate selected.size>=3 and log MELD_INITIAL or MELD_NEW
-    const meldRunBtn = this.add
-      .text(btnX - 110, btnY, "[Meld Run]", {
+    // Day 19: Discard button — at btnXs[4] (rightmost)
+    const discardBtn = this.add
+      .text(btnXs[4], btnY, "[Discard]", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#00ff00",
@@ -240,12 +259,49 @@ export class RackScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    meldRunBtn.on("pointerdown", () => {
-      const res = meldSelected("run");
-      if (res) console.log(`meldSelected success: run ${res.tileIds.join(",")}`);
+    discardBtn.on("pointerdown", async () => {
+      const res = discardSelected();
+      if (!res) return;
+      if (
+        latestPrivate &&
+        latestPrivate.gamePhase === "OpeningDiscard" &&
+        latestPrivate.ownSeat === latestPrivate.currentSeat &&
+        latestPrivate.ownRack.length === 15
+      ) {
+        const inRack = latestPrivate.ownRack.some((t) => t.ID === res.tileId);
+        if (!inRack) {
+          console.log(`discard failed: tile ${res.tileId} not in ownRack 15`);
+          return;
+        }
+        try {
+          const sock = await createSocket();
+          const matchId = getStoredMatchId();
+          if (!matchId) {
+            console.log("discard failed: no matchId");
+            return;
+          }
+          await sendMatchState(
+            sock,
+            matchId,
+            OpClientDiscard,
+            { tileId: res.tileId },
+            `req-discard-${Date.now()}`
+          );
+          console.log(`sent OpClientDiscard opening ${res.tileId} — Day 38`);
+          clearSelected();
+        } catch (e) {
+          console.log("discard failed", e);
+        }
+        return;
+      }
+      console.log(
+        `discardSelected success: ${res.tileId} (not OpeningDiscard — Day 38 only logs, Day 42 will send)`
+      );
     });
+
+    // Day 20: Meld buttons — at btnXs[2] and btnXs[3]
     const meldSetBtn = this.add
-      .text(btnX - 210, btnY, "[Meld Set]", {
+      .text(btnXs[2], btnY, "[Meld Set]", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#00ff00",
@@ -257,6 +313,21 @@ export class RackScene extends Phaser.Scene {
     meldSetBtn.on("pointerdown", () => {
       const res = meldSelected("set");
       if (res) console.log(`meldSelected success: set ${res.tileIds.join(",")}`);
+    });
+
+    const meldRunBtn = this.add
+      .text(btnXs[3], btnY, "[Meld Run]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#1a3d2e",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    meldRunBtn.on("pointerdown", () => {
+      const res = meldSelected("run");
+      if (res) console.log(`meldSelected success: run ${res.tileIds.join(",")}`);
     });
 
     // Day 30: subscribe to PrivateSnapshot — re-render OwnRack only (redaction)
@@ -272,10 +343,11 @@ export class RackScene extends Phaser.Scene {
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);
 
+    // Info text at bottom of ActionButtonsArea top, not overlapping buttons
     this.add
       .text(
-        layout.rack.x + layout.rack.w / 2,
-        layout.info.y + 8,
+        GAME_SPACE.width / 2,
+        ab.y - 14,
         "Rack — Day 20 meldSelected + Day 19 discardSelected",
         {
           fontFamily: "monospace",

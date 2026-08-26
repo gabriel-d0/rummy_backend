@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { renderDiscardRow } from "../ui/DiscardRow";
-import { getLayout } from "../ui/Layout";
+import { getSubspaces, GAME_SPACE } from "../ui/LayoutManager";
 import { renderStockCount, renderTurnIndicator } from "../ui/StockCount";
 import { renderTableMelds } from "../ui/TableMelds";
 import {
@@ -13,35 +13,36 @@ import { OpClientStart } from "../net/protocol";
 import { sendMatchState } from "../net/protocol";
 import { createSocket, getStoredMatchId } from "../net/nakama";
 
-// Day 15+ TableScene — now uses subspace Layout for mathematically defined bounds and responsive design
+// Day 15+ TableScene — now uses LayoutManager GAME_SPACE 1000x1000 with proportional subspaces
 // Day 31: subscribes to PublicSnapshot and re-renders TableMelds/DiscardRow/StockCount/CurrentSeat (not OwnRack)
+// Fix: unified to single GAME_SPACE layout, separate TopBar Stock/Turn, no overlap
+
 export class TableScene extends Phaser.Scene {
   constructor() {
     super("TableScene");
   }
 
   private renderPublicSnapshot(snap: PublicSnapshot): void {
-    const layout = getLayout(this.scale.width, this.scale.height);
-    // Stock and turn — topBar right-aligned
+    const s = getSubspaces();
+    // TopBar: Stock left, Turn right, no overlap
     renderStockCount(this, snap.stockCount, {
-      x: layout.topBar.x + layout.topBar.w - 60,
-      y: layout.topBar.y + 18,
+      x: s.TopBar.x + 80,
+      y: s.TopBar.y + s.TopBar.height / 2,
     });
     renderTurnIndicator(this, snap.currentSeat, snap.gamePhase, snap.turnPhase, {
-      x: layout.topBar.x + layout.topBar.w - 60,
-      y: layout.topBar.y + 45,
+      x: s.TopBar.x + s.TopBar.width - 120,
+      y: s.TopBar.y + s.TopBar.height / 2,
     });
-    // Table melds — inside tableMelds subspace
+    // MeldArea and DiscardRowArea are proportional subdivisions of TableArea
     renderTableMelds(this, snap.tableMelds, {
-      x: layout.tableMelds.x + 10,
-      y0: layout.tableMelds.y + 10,
+      x: s.MeldArea.x + 10,
+      y0: s.MeldArea.y + 10,
       rowHeight: 70,
       tileSpacing: 48,
     });
-    // Discard row — inside discardRow subspace
     renderDiscardRow(this, snap.discardRow, {
-      x: layout.discardRow.x + 10,
-      y: layout.discardRow.y + 18,
+      x: s.DiscardRowArea.x + 10,
+      y: s.DiscardRowArea.y + 16,
       spacing: 50,
     });
     // Update info text
@@ -56,46 +57,46 @@ export class TableScene extends Phaser.Scene {
   }
 
   create() {
-    const layout = getLayout(this.scale.width, this.scale.height);
+    const s = getSubspaces();
 
-    // Background fills entire game (will be resized on resize)
+    // Background fills entire GAME_SPACE (will be scaled via Scale.FIT)
     const bg = this.add
-      .image(layout.width / 2, layout.height / 2, "table")
-      .setDisplaySize(layout.width, layout.height);
+      .image(GAME_SPACE.width / 2, GAME_SPACE.height / 2, "table")
+      .setDisplaySize(GAME_SPACE.width, GAME_SPACE.height);
     bg.setData("isBg", true);
 
-    // Outer border for debug (subtle)
+    // Outer border for debug (subtle) - use TableArea outer
     this.add
       .rectangle(
-        layout.outer.x + layout.outer.w / 2,
-        layout.outer.y + layout.outer.h / 2,
-        layout.outer.w,
-        layout.outer.h,
+        s.TableArea.x + s.TableArea.width / 2,
+        s.TableArea.y + s.TableArea.height / 2,
+        s.TableArea.width,
+        s.TableArea.height,
         0x000000,
         0
       )
       .setStrokeStyle(2, 0x8b7355, 0.4);
 
-    // Top bar: Stock + Turn are inside topBar, right-aligned, not overlapping melds (mock for initial render before PublicSnapshot)
+    // TopBar: Stock left, Turn right, Start button left-center — no overlap
     renderStockCount(this, 77, {
-      x: layout.topBar.x + layout.topBar.w - 60,
-      y: layout.topBar.y + 18,
+      x: s.TopBar.x + 80,
+      y: s.TopBar.y + s.TopBar.height / 2,
     });
     renderTurnIndicator(this, 0, "Playing", "MustDraw", {
-      x: layout.topBar.x + layout.topBar.w - 60,
-      y: layout.topBar.y + 45,
+      x: s.TopBar.x + s.TopBar.width - 120,
+      y: s.TopBar.y + s.TopBar.height / 2,
     });
 
     // Day 37: Start button — visible only if Waiting + host Seat 0 + >=2 players
     const startBtn = this.add
-      .text(layout.topBar.x + 12, layout.topBar.y + 18, "[Start]", {
+      .text(s.TopBar.x + s.TopBar.width / 2, s.TopBar.y + s.TopBar.height / 2, "[Start]", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffffff",
         backgroundColor: "#1a5c2e",
         padding: { x: 10, y: 6 },
       })
-      .setOrigin(0, 0.5)
+      .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })
       .setData("isStartBtn", true)
       .setVisible(false)
@@ -136,7 +137,7 @@ export class TableScene extends Phaser.Scene {
     this.events.once("shutdown", unsubStart);
     this.events.once("destroy", unsubStart);
 
-    // Table melds: inside tableMelds subspace (mock)
+    // Table melds: inside MeldArea (proportional, not tableMelds subspace)
     const mockMelds = [
       {
         ID: "mock-run-1-2-3",
@@ -162,13 +163,13 @@ export class TableScene extends Phaser.Scene {
       },
     ];
     renderTableMelds(this, mockMelds, {
-      x: layout.tableMelds.x + 10,
-      y0: layout.tableMelds.y + 10,
+      x: s.MeldArea.x + 10,
+      y0: s.MeldArea.y + 10,
       rowHeight: 70,
       tileSpacing: 48,
     });
 
-    // Discard row: inside discardRow subspace (mock)
+    // Discard row: inside DiscardRowArea
     const mockDiscardRow = [
       {
         Tile: { ID: "disc-open", Colour: 1, Rank: 7, IsJoker: false },
@@ -187,8 +188,8 @@ export class TableScene extends Phaser.Scene {
       },
     ];
     renderDiscardRow(this, mockDiscardRow, {
-      x: layout.discardRow.x + 10,
-      y: layout.discardRow.y + 18,
+      x: s.DiscardRowArea.x + 10,
+      y: s.DiscardRowArea.y + 16,
       spacing: 50,
     });
 
@@ -199,33 +200,39 @@ export class TableScene extends Phaser.Scene {
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);
 
-    // Drop zone: inside dropZone subspace
-    const dz = layout.dropZone;
+    // Drop zone: centered between MeldArea and DiscardRowArea, or at bottom of TableArea
+    // Use a dedicated area below DiscardRowArea but above PlayerRackArea
+    const dropY = s.DiscardRowArea.y + s.DiscardRowArea.height + 16;
+    const dropH = 44;
     const dropZone = this.add
-      .rectangle(dz.x + dz.w / 2, dz.y + dz.h / 2, dz.w, dz.h, 0xffffff, 0.04)
+      .rectangle(GAME_SPACE.width / 2, dropY + dropH / 2, 600, dropH, 0xffffff, 0.04)
       .setStrokeStyle(1, 0xffff00, 0.4)
       .setInteractive({ dropZone: true });
     dropZone.setData("isDropZone", true);
     this.add
-      .text(dz.x + dz.w / 2, dz.y + dz.h / 2, "Drop zone — drag tile here", {
+      .text(GAME_SPACE.width / 2, dropY + dropH / 2, "Drop zone — drag tile here", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    this.input.on("drop", (_pointer: any, gameObject: any, dropZoneObj: any) => {
-      if (dropZoneObj.getData("isDropZone")) {
-        const tileId = gameObject.getData("tileId");
-        console.log(`drop ${tileId} at dropZone`);
+    // Note: drag is handled in RackScene via global game event to support cross-scene
+    // TableScene also listens for drop for when drag starts in TableScene (e.g., meld tiles)
+    this.input.on("drop", (_pointer: unknown, gameObject: unknown, dropZoneObj: unknown) => {
+      const g = gameObject as { getData?: (k: string) => unknown };
+      const d = dropZoneObj as { getData?: (k: string) => unknown };
+      if (d?.getData?.("isDropZone")) {
+        const tileId = g?.getData?.("tileId");
+        console.log(`drop ${String(tileId)} at dropZone — TableScene`);
       }
     });
 
-    // Info text inside info subspace (below drop, above rack)
+    // Info text at bottom of TableArea, above PlayerRackArea
     this.add
       .text(
-        layout.info.x + layout.info.w / 2,
-        layout.info.y + 8,
+        GAME_SPACE.width / 2,
+        s.TableArea.y + s.TableArea.height - 12,
         "Table — Stock:77 • seat-0 Playing/MustDraw",
         {
           fontFamily: "monospace",
@@ -238,14 +245,9 @@ export class TableScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setData("isInfo", true);
 
-    // Handle resize — recompute layout and re-render static mocks
-    this.scale.on("resize", (gameSize: Phaser.Structs.Size) => {
-      const nl = getLayout(gameSize.width, gameSize.height);
-      // For MVP we just re-create the scene on resize (simpler than moving all objects)
-      // In production, we would reposition each subspace element
+    // Handle resize — GAME_SPACE is fixed 1000x1000 with Scale.FIT, so we just restart to re-apply proportional layout
+    this.scale.on("resize", () => {
       this.scene.restart();
-      // Note: RackScene is separate but shares same scale event; it will also recompute
-      void nl;
     });
   }
 }

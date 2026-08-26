@@ -28,6 +28,17 @@ export function getSelectedIds(): string[] {
   return Array.from(selected);
 }
 
+// Day 19: discardSelected validates exactly 1 selected and logs DISCARD {tileId}, no server call yet
+export function discardSelected(): { tileId: string } | null {
+  if (selected.size !== 1) {
+    console.log(`discardSelected failed: selected.size ${selected.size} want 1`);
+    return null;
+  }
+  const tileId = Array.from(selected)[0];
+  console.log(`DISCARD {tileId: ${tileId}}`);
+  return { tileId };
+}
+
 export function renderRack(
   scene: Phaser.Scene,
   tiles: TileInstance[],

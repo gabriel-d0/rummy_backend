@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { renderRack, sortRack } from "../ui/Rack";
+import { discardSelected, renderRack, sortRack } from "../ui/Rack";
 
 // Day 11: RackScene renders PrivateView.OwnRack only (redaction) — 14 this.add.image per tile at x = 100 + i*50
 export class RackScene extends Phaser.Scene {
@@ -23,14 +23,31 @@ export class RackScene extends Phaser.Scene {
       const tileId = gameObject.getData("tileId");
       console.log(`dragstart ${tileId}`);
     });
+    // Day 19: discardSelected validates exactly 1 selected and logs DISCARD {tileId}, no server call yet
+    const discardBtn = this.add
+      .text(900, 620, "[Discard]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#333333",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    discardBtn.on("pointerdown", () => {
+      const res = discardSelected();
+      if (res) {
+        console.log(`discardSelected success: ${res.tileId}`);
+      }
+    });
     this.add
-      .text(512, 620, "RackScene — Day 17 dragstart(tileId) + Day 16 onTileClicked", {
+      .text(512, 620, "RackScene — Day 19 discardSelected(1) + Day 17 dragstart", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    // Day 18-20: discardSelected, meldSelected
+    // Day 20: meldSelected
   }
 }

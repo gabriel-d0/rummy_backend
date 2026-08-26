@@ -34,10 +34,11 @@
 		else selected.add(id);
 	}
 
-	// Day 30-31 — Opening discard + Draw stock: derived from privateStore when available, else fallback to prop tiles
+	// Day 30-31-34 — Opening discard + Draw stock + Normal discard: derived from privateStore when available, else fallback to prop tiles
 	const isOpeningDiscard = $derived($privateStore?.gamePhase === 'OpeningDiscard');
 	const isPlaying = $derived($privateStore?.gamePhase === 'Playing');
 	const isMustDraw = $derived($privateStore?.turnPhase === 'MustDraw');
+	const isMeldOrDiscard = $derived($privateStore?.turnPhase === 'MeldOrDiscard');
 	const isMyTurn = $derived(
 		$privateStore ? $privateStore.currentSeat === $privateStore.ownSeat : false
 	);
@@ -58,7 +59,7 @@
 	const canDiscard = $derived.by(() => {
 		if (!$privateStore) return selected.size === 1;
 		if (isOpeningDiscard && isMyTurn) return selected.size === 1 && rackCount === 15;
-		// later normal discard will also allow, but for Day 30 only opening
+		if (isPlaying && isMeldOrDiscard && isMyTurn) return selected.size === 1;
 		return false;
 	});
 

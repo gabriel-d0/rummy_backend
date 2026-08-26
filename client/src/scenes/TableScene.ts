@@ -200,13 +200,12 @@ export class TableScene extends Phaser.Scene {
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);
 
-    // Drop zone: centered between MeldArea and DiscardRowArea, or at bottom of TableArea
-    // Use a dedicated area below DiscardRowArea but above PlayerRackArea
-    const dropY = s.DiscardRowArea.y + s.DiscardRowArea.height + 16;
-    const dropH = 44;
+    // Drop zone: at bottom of TableArea, centered, not overlapping info (info is at top)
+    const dropH = 36;
+    const dropY = s.TableArea.y + s.TableArea.height - dropH - 8;
     const dropZone = this.add
-      .rectangle(GAME_SPACE.width / 2, dropY + dropH / 2, 600, dropH, 0xffffff, 0.04)
-      .setStrokeStyle(1, 0xffff00, 0.4)
+      .rectangle(GAME_SPACE.width / 2, dropY + dropH / 2, 500, dropH, 0xffffff, 0.06)
+      .setStrokeStyle(1, 0xffff00, 0.5)
       .setInteractive({ dropZone: true });
     dropZone.setData("isDropZone", true);
     this.add
@@ -214,11 +213,17 @@ export class TableScene extends Phaser.Scene {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
+        backgroundColor: "#00000044",
+        padding: { x: 4, y: 2 },
         align: "center",
       })
       .setOrigin(0.5);
-    // Note: drag is handled in RackScene via global game event to support cross-scene
-    // TableScene also listens for drop for when drag starts in TableScene (e.g., meld tiles)
+
+    // Also handle drag via game event for cross-scene (RackScene emits rummy:drop)
+    this.game.events.on("rummy:drop", (data: { tileId: string }) => {
+      console.log(`drop ${String(data.tileId)} at dropZone — TableScene via game event`);
+    });
+
     this.input.on("drop", (_pointer: unknown, gameObject: unknown, dropZoneObj: unknown) => {
       const g = gameObject as { getData?: (k: string) => unknown };
       const d = dropZoneObj as { getData?: (k: string) => unknown };
@@ -228,21 +233,16 @@ export class TableScene extends Phaser.Scene {
       }
     });
 
-    // Info text at bottom of TableArea, above PlayerRackArea
+    // Info text at top of TableArea (below TopBar, above MeldArea) — not overlapping drop zone
     this.add
-      .text(
-        GAME_SPACE.width / 2,
-        s.TableArea.y + s.TableArea.height - 12,
-        "Table — Stock:77 • seat-0 Playing/MustDraw",
-        {
-          fontFamily: "monospace",
-          fontSize: "10px",
-          color: "#ffff00",
-          backgroundColor: "#00000066",
-          padding: { x: 6, y: 2 },
-        }
-      )
-      .setOrigin(0.5)
+      .text(s.TableArea.x + 8, s.TableArea.y + 8, "Table — Stock:77 • seat-0 Playing/MustDraw", {
+        fontFamily: "monospace",
+        fontSize: "9px",
+        color: "#ffff00",
+        backgroundColor: "#00000055",
+        padding: { x: 4, y: 2 },
+      })
+      .setOrigin(0, 0)
       .setData("isInfo", true);
 
     // Handle resize — GAME_SPACE is fixed 1000x1000 with Scale.FIT, so we just restart to re-apply proportional layout

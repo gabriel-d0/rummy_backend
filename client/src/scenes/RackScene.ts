@@ -120,10 +120,15 @@ export class RackScene extends Phaser.Scene {
       spacing: 62,
     });
 
-    // Day 17: dragstart — store dragged tileId
+    // Day 17: dragstart — store dragged tileId and original position for snap-back
+    const dragOrig = new Map<string, { x: number; y: number }>();
     this.input.on("dragstart", (_pointer: unknown, gameObject: unknown) => {
-      const g = gameObject as { getData?: (k: string) => unknown };
-      const tileId = g?.getData?.("tileId");
+      const g = gameObject as { getData?: (k: string) => unknown; x: number; y: number };
+      const tileId = String(g?.getData?.("tileId") ?? "");
+      dragOrig.set(tileId, { x: g.x, y: g.y });
+      // Bring to top
+      const img = gameObject as Phaser.GameObjects.Image;
+      this.children.bringToTop(img);
       console.log(`dragstart ${String(tileId)}`);
     });
 
@@ -138,17 +143,22 @@ export class RackScene extends Phaser.Scene {
     );
 
     this.input.on("dragend", (pointer: unknown, gameObject: unknown) => {
-      const g = gameObject as { getData?: (k: string) => unknown; x: number; y: number };
-      const tileId = g?.getData?.("tileId");
+      const g = gameObject as {
+        getData?: (k: string) => unknown;
+        x: number;
+        y: number;
+        setPosition?: (x: number, y: number) => void;
+      };
+      const tileId = String(g?.getData?.("tileId") ?? "");
+      const orig = dragOrig.get(tileId);
       // Check if dropped in drop zone (which is in TableScene at GAME_SPACE.width/2, dropY)
       // For cross-scene, we check pointer position against drop zone bounds in GAME_SPACE
       const p = pointer as { x: number; y: number };
-      // Drop zone is at GAME_SPACE 600x44 centered at dropY+22
-      // We can get drop zone bounds from LayoutManager: it's below DiscardRowArea
-      const dropY = s.DiscardRowArea.y + s.DiscardRowArea.height + 16;
-      const dropH = 44;
+      // Drop zone is at bottom of TableArea (see TableScene) — centered, 500x36
+      const dropH = 36;
+      const dropY = s.TableArea.y + s.TableArea.height - dropH - 8;
       const dropX = GAME_SPACE.width / 2;
-      const dropW = 600;
+      const dropW = 500;
       const inDropZone =
         p.x >= dropX - dropW / 2 &&
         p.x <= dropX + dropW / 2 &&
@@ -156,11 +166,21 @@ export class RackScene extends Phaser.Scene {
         p.y <= dropY + dropH;
       if (inDropZone) {
         console.log(`drop ${String(tileId)} at dropZone — RackScene dragend`);
-        // Also emit a game event so TableScene can handle if needed
         this.game.events.emit("rummy:drop", { tileId, x: p.x, y: p.y });
+        dragOrig.delete(tileId);
+        return;
       }
-      // Snap back to rack if not dropped in zone — re-render from latest snapshot
-      // For mock, just log
+      // Snap back to rack if not dropped in zone — restore original position
+      if (orig && typeof (g as unknown as { setPosition?: unknown }).setPosition === "function") {
+        (g as unknown as { setPosition: (x: number, y: number) => void }).setPosition(
+          orig.x,
+          orig.y
+        );
+      } else if (orig) {
+        g.x = orig.x;
+        g.y = orig.y;
+      }
+      dragOrig.delete(tileId);
     });
 
     // ActionButtonsArea: flex layout for 5 buttons without overlap, centered, no info overlap
@@ -330,6 +350,25 @@ export class RackScene extends Phaser.Scene {
       if (res) console.log(`meldSelected success: run ${res.tileIds.join(",")}`);
     });
 
+    // Set initial button states based on mock snapshot (Playing MustDraw, ownSeat 0) so Draw is enabled
+    const mockSnap: PrivateSnapshot = {
+      v: 1,
+      gamePhase: "Playing",
+      turnPhase: "MustDraw",
+      currentSeat: 0,
+      players: [
+        { id: "alice", seat: 0, hasOpened: false, rackCount: 3 },
+        { id: "bob", seat: 1, hasOpened: false, rackCount: 14 },
+      ],
+      stockCount: 77,
+      discardRow: [],
+      tableMelds: [],
+      winner: -1,
+      ownRack: mockRack,
+      ownSeat: 0,
+    };
+    this.updateButtonStates(mockSnap, discardBtn, meldRunBtn, meldSetBtn, drawBtn, drawPrevBtn);
+
     // Day 30: subscribe to PrivateSnapshot — re-render OwnRack only (redaction)
     // Day 36: also update button states per CurrentSeat/TurnPhase/HasOpened
     // Day 38: track latestPrivate for opening discard handler
@@ -343,21 +382,22 @@ export class RackScene extends Phaser.Scene {
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);
 
-    // Info text at bottom of ActionButtonsArea top, not overlapping buttons
+    // Info text just above PlayerRackArea, left-aligned, not overlapping buttons
     this.add
       .text(
-        GAME_SPACE.width / 2,
-        ab.y - 14,
+        s.PlayerRackArea.x + 8,
+        s.PlayerRackArea.y - 10,
         "Rack — Day 20 meldSelected + Day 19 discardSelected",
         {
           fontFamily: "monospace",
-          fontSize: "10px",
+          fontSize: "9px",
           color: "#ffff00",
-          backgroundColor: "#00000066",
-          padding: { x: 6, y: 2 },
+          backgroundColor: "#00000055",
+          padding: { x: 4, y: 2 },
         }
       )
-      .setOrigin(0.5);
+      .setOrigin(0, 1)
+      .setData("isRackInfo", true);
 
     this.scale.on("resize", () => {
       this.scene.restart();

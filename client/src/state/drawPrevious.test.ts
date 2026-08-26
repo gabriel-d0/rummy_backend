@@ -111,7 +111,7 @@ describe("Draw previous discard — Day 40", () => {
     const src = fs.readFileSync(filePath, "utf-8");
     expect(src).toContain("OpClientDrawPreviousDiscard");
     expect(src).toContain("sendMatchState");
-    expect(src).toContain("[Prev]");
+    expect(src).toContain("Prev");
     expect(src).toContain("canDrawPrevious");
   });
 });

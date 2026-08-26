@@ -101,7 +101,7 @@ describe("Draw stock — Day 39", () => {
     const src = fs.readFileSync(filePath, "utf-8");
     expect(src).toContain("OpClientDrawStock");
     expect(src).toContain("sendMatchState");
-    expect(src).toContain("[Draw]");
+    expect(src).toContain("Draw");
     expect(src).toContain("req-draw-");
   });
 

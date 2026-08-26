@@ -67,19 +67,19 @@ export function getSubspaces(): Subspaces {
   };
 
   // TableArea: occupies middle, from below TopBar to above PlayerRackArea
-  // PlayerRackArea is 180px high at bottom, ActionButtonsArea is 70px at very bottom
+  // Modern: compact rack 132px + action bar 56px for cleaner bottom
   const ActionButtonsArea: Rect = {
     x: outerMargin,
-    y: GAME_SPACE.height - outerMargin - 70,
+    y: GAME_SPACE.height - outerMargin - 56,
     width: GAME_SPACE.width - outerMargin * 2,
-    height: 70,
+    height: 56,
   };
 
   const PlayerRackArea: Rect = {
     x: outerMargin,
-    y: ActionButtonsArea.y - gutter - 180,
+    y: ActionButtonsArea.y - gutter - 132,
     width: GAME_SPACE.width - outerMargin * 2,
-    height: 180,
+    height: 132,
   };
 
   const TableArea: Rect = {
@@ -129,7 +129,12 @@ export function centerY(rect: Rect): number {
 }
 
 /** Even spacing for N tiles inside an area with padding */
-export function spacing(areaWidth: number, tileCount: number, tileWidth: number, minGap = 6): number {
+export function spacing(
+  areaWidth: number,
+  tileCount: number,
+  tileWidth: number,
+  minGap = 6
+): number {
   if (tileCount <= 1) return 0;
   const totalTileWidth = tileCount * tileWidth;
   const available = areaWidth - totalTileWidth;
@@ -159,7 +164,7 @@ export function meldRowY(meldArea: Rect, rowIndex: number, rowHeight: number): n
 export function tilesInRow(
   rowRect: Rect,
   tileCount: number,
-  tileWidth: number,
+  tileWidth: number
 ): { x: number; y: number }[] {
   const positions: { x: number; y: number }[] = [];
   const gap = spacing(rowRect.width, tileCount, tileWidth);
@@ -196,7 +201,16 @@ export function drawDebugSubspaces(scene: Phaser.Scene, subspaces: Subspaces, al
     ActionButtonsArea: 0x00ffff,
   };
   for (const [name, rect] of Object.entries(subspaces) as [keyof Subspaces, Rect][]) {
-    const r = scene.add.rectangle(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width, rect.height, colors[name], alpha).setStrokeStyle(1, colors[name], 0.5);
+    const r = scene.add
+      .rectangle(
+        rect.x + rect.width / 2,
+        rect.y + rect.height / 2,
+        rect.width,
+        rect.height,
+        colors[name],
+        alpha
+      )
+      .setStrokeStyle(1, colors[name], 0.5);
     r.setData("isDebugSubspace", true);
     const label = scene.add.text(rect.x + 4, rect.y + 4, name, {
       fontFamily: "monospace",

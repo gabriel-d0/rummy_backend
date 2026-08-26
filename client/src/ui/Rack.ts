@@ -145,9 +145,25 @@ function createTileContainer(
     idLabel.setData("isRackTile", true);
     container.add(idLabel);
   }
+  // Modern selection: blue glow + checkmark, not yellow
   if (isSelected(tl.ID)) {
-    bg.setStrokeStyle(3, 0xffff00, 1);
-    container.setScale(1.05);
+    bg.setStrokeStyle(2.5, 0x1e88e5, 1);
+    bg.setFillStyle(0xe3f2fd);
+    container.setScale(1.06);
+    const glow = scene.add.rectangle(0, 0, 52, 68, 0x1e88e5, 0.08);
+    glow.setData("isRackTile", true);
+    container.addAt(glow, 1);
+    const check = scene.add.text(14, -22, "✓", {
+      fontFamily: "Inter, monospace",
+      fontSize: "10px",
+      color: "#1e88e5",
+      fontStyle: "bold",
+      backgroundColor: "#ffffff",
+      padding: { x: 3, y: 1 },
+    });
+    check.setOrigin(0.5);
+    check.setData("isRackTile", true);
+    container.add(check);
   }
   container.setInteractive(
     new Phaser.Geom.Rectangle(-24, -32, 48, 64),
@@ -158,11 +174,14 @@ function createTileContainer(
   }
   container.on("pointerdown", () => {
     onTileClicked(tl.ID);
+    // Visual update will happen on next render, but also do immediate
     if (isSelected(tl.ID)) {
-      bg.setStrokeStyle(3, 0xffff00, 1);
-      container.setScale(1.05);
+      bg.setStrokeStyle(2.5, 0x1e88e5, 1);
+      bg.setFillStyle(0xe3f2fd);
+      container.setScale(1.06);
     } else {
       bg.setStrokeStyle(2, colourToHex(tl.Colour), 1);
+      bg.setFillStyle(0xffffff);
       container.setScale(1);
     }
     console.log(`onTileClicked ${tl.ID} selected: ${isSelected(tl.ID)}`);

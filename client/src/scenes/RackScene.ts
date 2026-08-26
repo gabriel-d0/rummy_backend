@@ -39,12 +39,37 @@ export class RackScene extends Phaser.Scene {
   }
 
   private setButtonEnabled(btn: Phaser.GameObjects.Text, enabled: boolean): void {
-    btn.setAlpha(enabled ? 1 : 0.35);
+    btn.setAlpha(enabled ? 1 : 0.4);
     if (enabled) {
       btn.setInteractive({ useHandCursor: true });
+      btn.setStyle({ backgroundColor: "#1a5c2e" });
     } else {
       btn.disableInteractive();
+      btn.setStyle({ backgroundColor: "#2a2a2a" });
     }
+  }
+
+  private createModernButton(x: number, y: number, label: string): Phaser.GameObjects.Text {
+    const btn = this.add.text(x, y, label, {
+      fontFamily: "Inter, system-ui, monospace",
+      fontSize: "12px",
+      color: "#ffffff",
+      backgroundColor: "#1a5c2e",
+      padding: { x: 14, y: 8 },
+      fontStyle: "600",
+    });
+    btn.setOrigin(0.5);
+    btn.setInteractive({ useHandCursor: true });
+    // Subtle shadow via stroke
+    btn.setStroke("#0f2e1a", 1);
+    btn.on("pointerover", () => {
+      if (btn.alpha === 1) btn.setStyle({ backgroundColor: "#228a3e" });
+    });
+    btn.on("pointerout", () => {
+      if (btn.alpha === 1) btn.setStyle({ backgroundColor: "#1a5c2e" });
+      else btn.setStyle({ backgroundColor: "#2a2a2a" });
+    });
+    return btn;
   }
 
   private updateButtonStates(
@@ -74,33 +99,51 @@ export class RackScene extends Phaser.Scene {
   create() {
     const s = getSubspaces();
 
-    // Rack background fills PlayerRackArea (wood)
+    // Modern rack background — rounded wood with subtle shadow, not stretched image
+    const rackBg = this.add.rectangle(
+      s.PlayerRackArea.x + s.PlayerRackArea.width / 2,
+      s.PlayerRackArea.y + s.PlayerRackArea.height / 2,
+      s.PlayerRackArea.width - 4,
+      s.PlayerRackArea.height - 4,
+      0x5d4037
+    );
+    rackBg.setStrokeStyle(2, 0x3e2723, 0.8);
+    // @ts-ignore: rounded not in types but available at runtime
+    if ((rackBg as unknown as { setRounded?: (r: number) => void }).setRounded) {
+      (rackBg as unknown as { setRounded: (r: number) => void }).setRounded(12);
+    }
+    // Inner highlight
     this.add
-      .image(
+      .rectangle(
         s.PlayerRackArea.x + s.PlayerRackArea.width / 2,
         s.PlayerRackArea.y + s.PlayerRackArea.height / 2,
-        "rack"
+        s.PlayerRackArea.width - 8,
+        s.PlayerRackArea.height - 8,
+        0x6d4c41,
+        0.5
       )
-      .setDisplaySize(s.PlayerRackArea.width, s.PlayerRackArea.height);
+      .setStrokeStyle(1, 0x8d6e63, 0.3);
 
-    // Draw slot outlines for visual clarity (14 slots) centered in PlayerRackArea
-    const slotW = 48;
-    const slotH = 80;
+    // Draw slot outlines — modern, subtle, rounded, centered
+    const slotW = 46;
+    const slotH = 68;
     const n = 14;
-    const totalSlotW = n * slotW + (n - 1) * 6;
+    const totalSlotW = n * slotW + (n - 1) * 8;
     const slotStartX = s.PlayerRackArea.x + (s.PlayerRackArea.width - totalSlotW) / 2;
     const slotY = s.PlayerRackArea.y + (s.PlayerRackArea.height - slotH) / 2;
     for (let i = 0; i < n; i++) {
-      this.add
-        .rectangle(
-          slotStartX + i * (slotW + 6) + slotW / 2,
-          slotY + slotH / 2,
-          slotW,
-          slotH,
-          0x3d2817,
-          0
-        )
-        .setStrokeStyle(1, 0x5a3d1a, 0.5);
+      const slot = this.add.rectangle(
+        slotStartX + i * (slotW + 8) + slotW / 2,
+        slotY + slotH / 2,
+        slotW,
+        slotH,
+        0x3e2723,
+        0.4
+      );
+      slot.setStrokeStyle(1, 0x4e342e, 0.6);
+      if ((slot as unknown as { setRounded?: (r: number) => void }).setRounded) {
+        (slot as unknown as { setRounded: (r: number) => void }).setRounded(6);
+      }
     }
 
     // Day 12 + Day 16: sorted rack with selection (mock for initial render before any PrivateSnapshot)
@@ -198,20 +241,11 @@ export class RackScene extends Phaser.Scene {
     // Track latest private snapshot for opening discard handler
     let latestPrivate: PrivateSnapshot | null = null;
 
-    // Day 39: Draw button — at btnXs[0]
-    const drawBtn = this.add
-      .text(btnXs[0], btnY, "[Draw]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setAlpha(0.5)
-      .disableInteractive();
+    // Day 39: Draw button — at btnXs[0] — modern pill
+    const drawBtn = this.createModernButton(btnXs[0], btnY, "Draw");
     drawBtn.setData("isDrawBtn", true);
+    drawBtn.setAlpha(0.5);
+    drawBtn.disableInteractive();
     drawBtn.on("pointerdown", async () => {
       if (drawBtn.alpha < 1) return;
       try {
@@ -231,19 +265,10 @@ export class RackScene extends Phaser.Scene {
     });
 
     // Day 40: DrawPrevious button — at btnXs[1]
-    const drawPrevBtn = this.add
-      .text(btnXs[1], btnY, "[Prev]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setAlpha(0.5)
-      .disableInteractive();
+    const drawPrevBtn = this.createModernButton(btnXs[1], btnY, "Prev");
     drawPrevBtn.setData("isDrawPrevBtn", true);
+    drawPrevBtn.setAlpha(0.5);
+    drawPrevBtn.disableInteractive();
     drawPrevBtn.on("pointerdown", async () => {
       if (drawPrevBtn.alpha < 1) return;
       try {
@@ -268,17 +293,18 @@ export class RackScene extends Phaser.Scene {
       }
     });
 
-    // Day 19: Discard button — at btnXs[4] (rightmost)
-    const discardBtn = this.add
-      .text(btnXs[4], btnY, "[Discard]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    // Day 19: Discard button — at btnXs[4] (rightmost) — modern, red accent when enabled
+    const discardBtn = this.createModernButton(btnXs[4], btnY, "Discard");
+    discardBtn.setData("isDiscardBtn", true);
+    // Override to red for discard
+    discardBtn.setStyle({ backgroundColor: "#5a1a1a" });
+    discardBtn.on("pointerover", () => {
+      if (discardBtn.alpha === 1) discardBtn.setStyle({ backgroundColor: "#7a2a2a" });
+    });
+    discardBtn.on("pointerout", () => {
+      if (discardBtn.alpha === 1) discardBtn.setStyle({ backgroundColor: "#5a1a1a" });
+      else discardBtn.setStyle({ backgroundColor: "#2a2a2a" });
+    });
     discardBtn.on("pointerdown", async () => {
       const res = discardSelected();
       if (!res) return;
@@ -319,32 +345,16 @@ export class RackScene extends Phaser.Scene {
       );
     });
 
-    // Day 20: Meld buttons — at btnXs[2] and btnXs[3]
-    const meldSetBtn = this.add
-      .text(btnXs[2], btnY, "[Meld Set]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    // Day 20: Meld buttons — at btnXs[2] and btnXs[3] — modern
+    const meldSetBtn = this.createModernButton(btnXs[2], btnY, "Meld Set");
+    meldSetBtn.setData("isMeldSetBtn", true);
     meldSetBtn.on("pointerdown", () => {
       const res = meldSelected("set");
       if (res) console.log(`meldSelected success: set ${res.tileIds.join(",")}`);
     });
 
-    const meldRunBtn = this.add
-      .text(btnXs[3], btnY, "[Meld Run]", {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#00ff00",
-        backgroundColor: "#1a3d2e",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    const meldRunBtn = this.createModernButton(btnXs[3], btnY, "Meld Run");
+    meldRunBtn.setData("isMeldRunBtn", true);
     meldRunBtn.on("pointerdown", () => {
       const res = meldSelected("run");
       if (res) console.log(`meldSelected success: run ${res.tileIds.join(",")}`);

@@ -198,10 +198,31 @@ This log records each “one clearly scoped change per day” per `AGENTS.md:5` 
 - **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main`.
 - **Smoke:** `make smoke` / `scripts/smoke.sh` `SMOKE PASSED`.
 
-## Next (Day 77 / AGENTS Day 22 — already done)
+## Phase 12 — Minimal playable client adapter (Day 77 / AGENTS Day 24)
 
-Per AGENTS **Day 22 — Developer tooling and operator documentation** already completed as `4583413` (`docs/protocol.md` etc.); Days 22–23 are done. Next polish: final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and optional minimal client adapter (`Day 24` `AGENTS.md:812` — only after backend stable). See `docs/architecture.md` and `docs/testing.md` for harness extension.
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **77/24** | `5ade046` `feat: add minimal rummy match test client` | `cmd/rummy-cli/main.go` (new, 380 lines) `Makefile` `cli`/`cli-help` `README.md` `Minimal Test Client` | Minimal CLI for local simulation (in-process `RoundState` via `internal/match`+`setup`, seeded `NewRoundState` 42, shows `PrivateView.OwnRack` vs `PublicView` `RackCount`/`DiscardRow`/`TableMelds`/`CurrentSeat`, commands `draw`/`discard <id>`/`meld <run|set> <id>...`/`extend <meldId> <id>...`/`prev`/`pickup <idx> <id> <id>`/`replace <target> <tile> <n1> <n2>`/`switch`/`state`/`winner`/`help`/`quit`; `go vet` clean, `go run --help` shows usage, manual `printf "state\nswitch bob\nstate\nquit\n" | go run` shows `Public JSON bytes` no leak, `make cli`/`make cli-help`; no private data in `OpServerEvent`/`Public` payloads). Acceptance: two local users can play small manual flow via `alice: discard`→`bob: draw` etc., no private leak. |
+
+*Day 77 verified via `go vet` + `go run --help` + manual `state` flow and `docker compose build`.*
 
 ---
 
-*Generated from `git log --oneline --reverse` `36c2c59..01f6a3c` (78 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*
+## Current State (after Day 77 / AGENTS Day 24)
+
+- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol` plus `cmd/rummy-cli`.
+- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy`.
+- **Gameplay implemented:** Full `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard`→`RoundComplete`) with `DISCARD`/`DRAW_STOCK`/`DRAW_PREVIOUS`/`PICKUP`/`MELD_INITIAL` (50+ run)/`MELD_NEW`/`EXTEND`/`REPLACE_JOKER` and `ROUND_COMPLETE` win, `TableMeld{Kind}` stable, joker immutability, conservation `106`, `PublicView`/`PrivateView` versioned `1` with reconnection, plus `TestDeterministicSimulation` and **minimal CLI `cmd/rummy-cli` (`make cli`) showing `Private` vs `Public` redaction**.
+- **Tests:** `go test ./...` green (28 tests including deterministic simulation 7 subtests, `CheckTileConservation` after every step, exhaustive redaction, meld matrix, win 4, snapshot hardening 4).
+- **Docs:** `docs/project-baseline.md`, `docs/rules-decisions.md` (Day 19 + Day 15 `Kind`), `docs/terminology.md`, `README.md` (now `Minimal Test Client` + Phase 11 `TestDeterministicSimulation` + Phase 12 `Minimal Client`), `docs/protocol.md`, `docs/state-machine.md`, `docs/testing.md` (now references deterministic harness and CLI), `docs/architecture.md`, `AGENTS.md`, `docs/daily-log.md` (this file).
+- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build`.
+- **Smoke:** `make smoke` `SMOKE PASSED`; `make cli` manual flow `alice→bob` works, `Public JSON` no leak.
+- **Client:** `cmd/rummy-cli/main.go` `go vet` clean, `make cli-help`/`make cli`, `go run --help` shows `help, state, draw, discard, meld, extend, prev, pickup, replace, winner, switch, quit`.
+
+## Next (Final polish)
+
+Per `AGENTS.md:135` `Day 23` refactor already done as `ba7d6b8`; after Day 24 client, final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and tag `rummy-mvp-rc1` when `make smoke` passes on a fresh `docker compose up --build -d`. See `docs/architecture.md` and `docs/testing.md` for harness extension.
+
+---
+
+*Generated from `git log --oneline --reverse` `36c2c59..5ade046` (80 commits) on `2026-08-26`. For `what changed` per day see `git show --stat <hash>`.*

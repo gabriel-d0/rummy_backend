@@ -210,7 +210,7 @@
 						Autentificat ca <span class="font-mono text-white"
 							>{$authStore?.user_id?.slice(0, 8) ?? 'anon'}</span
 						>
-						{#if $socketStore}
+						{#if isAuthed}
 							<span class="ml-2 text-emerald-300">● conectat</span>
 						{:else}
 							<span class="ml-2 text-white/40">○ neconectat</span>

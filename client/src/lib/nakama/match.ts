@@ -122,14 +122,23 @@ export async function listAvailableMatches(): Promise<AvailableMatch[]> {
 		if (!session) return [];
 		const client = getClient();
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const result: any = await (client as any).listMatches(session, 10, true, 'rummy', 2, 4, '');
-		const matches = result?.matches ?? result?.result ?? [];
-		if (!Array.isArray(matches)) return [];
-		return matches
+		let result: any;
+		try {
+			// Try with no label filter and minSize 1 so 1-player waiting rooms are visible
+			result = await (client as any).listMatches(session, 10, true, '', 1, 4, '');
+		} catch (_err2) {
+			void _err2;
+			// fallback with label 'rummy' if server expects it
+			result = await (client as any).listMatches(session, 10, true, 'rummy', 1, 4, '');
+		}
+		const matches = result?.matches ?? result?.result ?? result ?? [];
+		const arr = Array.isArray(matches) ? matches : Array.isArray(result) ? result : [];
+		if (!Array.isArray(arr) || arr.length === 0) return [];
+		return arr
 			.map((m: Record<string, unknown>) => ({
 				matchId: (m.matchId ?? m.match_id ?? m.id ?? '') as string,
-				label: (m.label ?? '') as string,
-				size: (m.size ?? 0) as number
+				label: (m.label ?? m.authoritative ?? '') as string,
+				size: (m.size ?? m.playerCount ?? (m as unknown as { size: number }).size ?? 0) as number
 			}))
 			.filter((m: AvailableMatch) => !!m.matchId);
 	} catch (_err) {

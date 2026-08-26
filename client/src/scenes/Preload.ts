@@ -10,11 +10,13 @@ export class Preload extends Phaser.Scene {
     // Day 7: Add tile.png for red-1 and joker.png for Joly
     this.load.image("tile", "assets/tile.png");
     this.load.image("joker", "assets/joker.png");
-    // Day 8-10 will add table.png, rack.png
+    // Day 8: Add table.png (green felt 1024x768)
+    this.load.image("table", "assets/table.png");
+    // Day 9-10 will add rack.png
   }
 
   create() {
-    console.log("Preload complete — Day 7 tile + joker loaded");
+    console.log("Preload complete — Day 8 table loaded");
     this.scene.start("TableScene");
     this.scene.launch("RackScene");
   }

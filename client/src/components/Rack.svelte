@@ -1,58 +1,92 @@
 <script lang="ts">
-  import Tile from "./Tile.svelte";
+	import { SvelteSet } from 'svelte/reactivity';
+	import Tile from './Tile.svelte';
 
-  type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
+	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
 
-  let { tiles = [
-    { id: "r1", colour: 2, rank: 3 },
-    { id: "r2", colour: 2, rank: 3 },
-    { id: "r3", colour: 3, rank: 4 },
-    { id: "r4", colour: 3, rank: 9 },
-    { id: "r5", colour: 3, rank: 10 },
-    { id: "r6", colour: 3, rank: 12 },
-    { id: "r7", colour: 3, rank: 13 },
-    { id: "r8", colour: 4, rank: 4 },
-    { id: "r9", colour: 4, rank: 5 },
-    { id: "r10", colour: 4, rank: 7 },
-    { id: "r11", colour: 4, rank: 9 }
-  ] } = $props<{ tiles?: RackTile[] }>();
+	let {
+		tiles = [
+			{ id: 'r1', colour: 2, rank: 3 },
+			{ id: 'r2', colour: 2, rank: 3 },
+			{ id: 'r3', colour: 3, rank: 4 },
+			{ id: 'r4', colour: 3, rank: 9 },
+			{ id: 'r5', colour: 3, rank: 10 },
+			{ id: 'r6', colour: 3, rank: 12 },
+			{ id: 'r7', colour: 3, rank: 13 },
+			{ id: 'r8', colour: 4, rank: 4 },
+			{ id: 'r9', colour: 4, rank: 5 },
+			{ id: 'r10', colour: 4, rank: 7 },
+			{ id: 'r11', colour: 4, rank: 9 }
+		]
+	} = $props<{ tiles?: RackTile[] }>();
 
-  let selected = $state(new Set<string>());
+	let selected = new SvelteSet<string>();
 
-  function toggle(id: string) {
-    if (selected.has(id)) selected.delete(id);
-    else selected.add(id);
-    selected = new Set(selected);
-  }
+	function toggle(id: string) {
+		if (selected.has(id)) selected.delete(id);
+		else selected.add(id);
+	}
 </script>
 
-<div class="w-full rounded-2xl bg-[#1a1a1a] border border-white/10 p-3 sm:p-4 shadow-xl">
-  <div class="flex items-center justify-between mb-3">
-    <div class="flex items-center gap-2">
-      <div class="w-7 h-7 rounded-full bg-white grid place-items-center text-xs font-bold text-black">TU</div>
-      <div>
-        <div class="text-xs font-bold text-white">Mâna ta • {tiles.length} cărți <span class="ml-1 text-[10px] bg-amber-400 text-black px-1.5 py-0.5 rounded font-bold">TREBUIE SĂ TRAGI</span></div>
-        <div class="text-[11px] text-white/60">Click pe carte pentru selectare • Drag pe set pentru lipire</div>
-      </div>
-    </div>
-    <div class="hidden sm:flex gap-1.5">
-      <button class="text-xs bg-white/10 text-white/80 px-3 py-1 rounded-full font-medium">SORTEAZĂ CULOARE</button>
-      <button class="text-xs bg-white/10 text-white/80 px-3 py-1 rounded-full font-medium">SORTEAZĂ NUMĂR</button>
-    </div>
-  </div>
+<div class="w-full rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-xl sm:p-4">
+	<div class="mb-3 flex items-center justify-between">
+		<div class="flex items-center gap-2">
+			<div
+				class="grid h-7 w-7 place-items-center rounded-full bg-white text-xs font-bold text-black"
+			>
+				TU
+			</div>
+			<div>
+				<div class="text-xs font-bold text-white">
+					Mâna ta • {tiles.length} cărți
+					<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
+						>TREBUIE SĂ TRAGI</span
+					>
+				</div>
+				<div class="text-[11px] text-white/60">
+					Click pe carte pentru selectare • Drag pe set pentru lipire
+				</div>
+			</div>
+		</div>
+		<div class="hidden gap-1.5 sm:flex">
+			<button class="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/80"
+				>SORTEAZĂ CULOARE</button
+			>
+			<button class="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/80"
+				>SORTEAZĂ NUMĂR</button
+			>
+		</div>
+	</div>
 
-  <div class="flex flex-wrap gap-1.5 sm:gap-2 justify-center sm:justify-start content-start min-h-[110px]">
-    {#each tiles as t (t.id)}
-      <button onclick={() => toggle(t.id)} onkeydown={(e) => e.key === "Enter" && toggle(t.id)} class="p-0 bg-transparent border-0">
-        <Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} selected={selected.has(t.id)} />
-      </button>
-    {/each}
-  </div>
+	<div
+		class="flex min-h-[110px] flex-wrap content-start justify-center gap-1.5 sm:justify-start sm:gap-2"
+	>
+		{#each tiles as t (t.id)}
+			<button
+				onclick={() => toggle(t.id)}
+				onkeydown={(e) => e.key === 'Enter' && toggle(t.id)}
+				class="border-0 bg-transparent p-0"
+			>
+				<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} selected={selected.has(t.id)} />
+			</button>
+		{/each}
+	</div>
 
-  <div class="mt-3 flex flex-wrap gap-2">
-    <button class="flex-1 sm:flex-none bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold px-4 py-2.5 rounded-xl">▶ TRAGE DIN TALON</button>
-    <button class="flex-1 sm:flex-none bg-white/10 text-white/40 text-xs font-bold px-4 py-2.5 rounded-xl cursor-not-allowed">ETALEAZĂ SELECTATE</button>
-    <button class="flex-1 sm:flex-none bg-white/10 text-white/40 text-xs font-bold px-4 py-2.5 rounded-xl cursor-not-allowed">ARUNCĂ CARTEA</button>
-    <button class="hidden sm:block ml-auto text-xs text-white/50" onclick={() => (selected = new Set())}>ANULEAZĂ SELECȚIA</button>
-  </div>
+	<div class="mt-3 flex flex-wrap gap-2">
+		<button
+			class="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-black hover:bg-emerald-400 sm:flex-none"
+			>▶ TRAGE DIN TALON</button
+		>
+		<button
+			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"
+			>ETALEAZĂ SELECTATE</button
+		>
+		<button
+			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"
+			>ARUNCĂ CARTEA</button
+		>
+		<button class="ml-auto hidden text-xs text-white/50 sm:block" onclick={() => selected.clear()}
+			>ANULEAZĂ SELECȚIA</button
+		>
+	</div>
 </div>

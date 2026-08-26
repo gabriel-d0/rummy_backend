@@ -1,0 +1,38 @@
+name: Client CI
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["client/**", ".github/workflows/client.yml"]
+  pull_request:
+    branches: ["main"]
+    paths: ["client/**", ".github/workflows/client.yml"]
+
+jobs:
+  client-checks:
+    name: SvelteKit lint / check / test / build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+      - name: Install deps
+        run: npm ci
+      - name: Prettier --check
+        run: npm run lint -- --no-error-on-unmatched-pattern || npm run lint
+      - name: ESLint + svelte-check
+        run: npm run check
+      - name: Vitest --run
+        run: npm run test:unit -- --run
+      - name: Vite build
+        run: npm run build
+      - name: Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e
+        run: npm run test:e2e

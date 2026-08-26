@@ -1,8 +1,9 @@
 import Phaser from "phaser";
 import { renderDiscardRow } from "../ui/DiscardRow";
+import { renderStockCount, renderTurnIndicator } from "../ui/StockCount";
 import { renderTableMelds } from "../ui/TableMelds";
 
-// Day 14: TableScene renders PublicView.TableMelds/DiscardRow/StockCount/CurrentSeat
+// Day 15: TableScene renders PublicView.TableMelds/DiscardRow/StockCount/CurrentSeat
 export class TableScene extends Phaser.Scene {
   constructor() {
     super("TableScene");
@@ -44,14 +45,16 @@ export class TableScene extends Phaser.Scene {
       { Tile: { ID: "disc-2", Colour: 3, Rank: 9, IsJoker: false }, IsOpeningDiscard: false, Index: 2 },
     ];
     renderDiscardRow(this, mockDiscardRow, { x: 100, y: 300, spacing: 40 });
+    // Day 15: renderStockCount and TurnIndicator at x=800 y=50 with mock PublicView
+    renderStockCount(this, 77, { x: 800, y: 50 });
+    renderTurnIndicator(this, 0, "Playing", "MustDraw", { x: 800, y: 80 });
     this.add
-      .text(512, 340, "TableScene — Day 14 renderDiscardRow(disc-open flagged)", {
+      .text(512, 340, "TableScene — Day 15 Stock:77 Current:seat-0 Playing/MustDraw", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    // Day 15 will add renderStockCount, TurnIndicator
   }
 }

@@ -62,6 +62,42 @@ function extractMatchId(result: unknown, fallback: string): string {
 }
 
 export async function createMatch(): Promise<string> {
+	// Try authoritative RPC first (real Nakama)
+	try {
+		const session = get(authStore);
+		if (session) {
+			const client = getClient();
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const rpcRes: any = await (client as any).rpc(session, 'create_match', '');
+			const payloadStr = rpcRes?.payload ?? rpcRes;
+			let parsed: Record<string, unknown> = {};
+			try {
+				parsed =
+					typeof payloadStr === 'string'
+						? JSON.parse(payloadStr)
+						: (payloadStr as Record<string, unknown>);
+			} catch (_e) {
+				void _e;
+			}
+			const rpcMatchId = (parsed.matchId ?? parsed.match_id ?? parsed.id ?? '') as string;
+			if (rpcMatchId) {
+				// RPC created the match, now join it via socket
+				let sock = getSocket();
+				if (!sock) sock = await createSocket();
+				try {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					await (sock as any).joinMatch(rpcMatchId);
+				} catch (_e2) {
+					void _e2;
+				}
+				persistMatchId(rpcMatchId);
+				return rpcMatchId;
+			}
+		}
+	} catch (_err) {
+		void _err;
+	}
+	// Fallback: relayed via socket.createMatch (mock in tests)
 	let sock = getSocket();
 	if (!sock) {
 		sock = await createSocket();
@@ -121,26 +157,48 @@ export async function listAvailableMatches(): Promise<AvailableMatch[]> {
 		const session = get(authStore);
 		if (!session) return [];
 		const client = getClient();
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		let result: any;
-		try {
-			// Try with no label filter and minSize 1 so 1-player waiting rooms are visible
-			result = await (client as any).listMatches(session, 10, true, '', 1, 4, '');
-		} catch (_err2) {
-			void _err2;
-			// fallback with label 'rummy' if server expects it
-			result = await (client as any).listMatches(session, 10, true, 'rummy', 1, 4, '');
+		const tryList = async (auth: boolean | undefined, label: string) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const res: any = await (client as any).listMatches(session, 10, auth, label, 1, 4, '');
+			return res?.matches ?? res?.result ?? res ?? [];
+		};
+		let all: unknown[] = [];
+		// Try authoritative and non-authoritative, with and without label
+		for (const auth of [undefined, true, false] as const) {
+			for (const label of ['', 'rummy'] as const) {
+				try {
+					const part = await tryList(auth as unknown as boolean, label);
+					if (Array.isArray(part) && part.length > 0) {
+						all = [...all, ...part];
+					}
+				} catch (_e) {
+					void _e;
+				}
+			}
 		}
-		const matches = result?.matches ?? result?.result ?? result ?? [];
-		const arr = Array.isArray(matches) ? matches : Array.isArray(result) ? result : [];
-		if (!Array.isArray(arr) || arr.length === 0) return [];
-		return arr
-			.map((m: Record<string, unknown>) => ({
-				matchId: (m.matchId ?? m.match_id ?? m.id ?? '') as string,
-				label: (m.label ?? m.authoritative ?? '') as string,
-				size: (m.size ?? m.playerCount ?? (m as unknown as { size: number }).size ?? 0) as number
-			}))
-			.filter((m: AvailableMatch) => !!m.matchId);
+		// Also try plain limit 10 no filter
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const res: any = await (client as any).listMatches(session, 10);
+			const part = res?.matches ?? res?.result ?? res ?? [];
+			if (Array.isArray(part) && part.length > 0) all = [...all, ...part];
+		} catch (_e) {
+			void _e;
+		}
+		// Deduplicate by matchId
+		const seen = new Set<string>();
+		const out: AvailableMatch[] = [];
+		for (const m of all as Record<string, unknown>[]) {
+			const id = (m.matchId ?? m.match_id ?? m.id ?? '') as string;
+			if (!id || seen.has(id)) continue;
+			seen.add(id);
+			out.push({
+				matchId: id,
+				label: (m.label ?? '') as string,
+				size: (m.size ?? (m as unknown as { size: number }).size ?? 0) as number
+			});
+		}
+		return out;
 	} catch (_err) {
 		void _err;
 		return [];

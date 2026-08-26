@@ -16,7 +16,6 @@
 		listAvailableMatches,
 		type AvailableMatch
 	} from '$lib/nakama/match';
-	import { socketStore } from '$lib/nakama/socket';
 	import { reconnect } from '$lib/nakama/reconnect';
 	import { colors } from '$lib/ui/tokens';
 

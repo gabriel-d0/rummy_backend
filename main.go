@@ -38,6 +38,13 @@ func InitModule(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 
 	logger.Info("Rummy backend RPCs registered: health, version")
 
+	// RPC for authoritative match creation: client calls rpc("create_match") -> nk.MatchCreate("rummy")
+	if err := initializer.RegisterRpc("create_match", rpcCreateMatch); err != nil {
+		logger.Error("Failed to register create_match RPC: %v", err)
+		return err
+	}
+	logger.Info("Rummy backend RPC registered: create_match")
+
 	// Register authoritative match handler (Day 22). The match name "rummy"
 	// is the stable ID clients use via nk.matchCreate / match join.
 	if err := initializer.RegisterMatch("rummy", match.NewRummyMatch); err != nil {
@@ -98,5 +105,18 @@ func rpcVersion(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runti
 	if err != nil {
 		return "", runtime.NewError("marshal failed", 13)
 	}
+	return string(b), nil
+}
+
+func rpcCreateMatch(ctx context.Context, logger runtime.Logger, db *sql.DB, nk runtime.NakamaModule, _payload string) (string, error) {
+	userID, _ := ctx.Value(runtime.RUNTIME_CTX_USER_ID).(string)
+	logger.Info("rpcCreateMatch called by %v", userID)
+	matchId, err := nk.MatchCreate(ctx, "rummy", map[string]interface{}{})
+	if err != nil {
+		logger.Error("MatchCreate rummy failed: %v", err)
+		return "", runtime.NewError("match create failed", 13)
+	}
+	logger.Info("Created rummy match %s for %s", matchId, userID)
+	b, _ := json.Marshal(map[string]string{"matchId": matchId})
 	return string(b), nil
 }

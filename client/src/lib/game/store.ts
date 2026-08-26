@@ -5,8 +5,9 @@ import {
 	type PrivateSnapshot,
 	type PublicSnapshot
 } from './snapshot';
-import { OpServerState, OpServerStatePublic } from '../nakama/protocol';
+import { OpServerState, OpServerStatePublic, OpServerError } from '../nakama/protocol';
 import { setMatchDataHandler } from '../nakama/socket';
+import { onServerError } from './errorStore';
 
 // Day 22-25 — Game store — private + public + reconnection — Svelte writable Private/Public Snapshot, onPrivateSnapshot/onPublicSnapshot, lastPrivate, privateBySeat, derived isMyTurn, TableBoard subscribes, socket.onDisconnect keeps matchId
 
@@ -127,6 +128,7 @@ export function handleMatchData(opCode: number, rawData: unknown): boolean {
 		const parsed = JSON.parse(jsonStr) as unknown;
 		if (opCode === OpServerState) return onPrivateSnapshot(parsed);
 		if (opCode === OpServerStatePublic) return onPublicSnapshot(parsed);
+		if (opCode === OpServerError) return onServerError(parsed);
 		return false;
 	} catch (_err) {
 		void _err;

@@ -79,17 +79,32 @@
 				{#if !isAuthed}
 					<div class="text-sm text-white">Se conectează…</div>
 				{:else if !priv && !pub}
-					<div class="text-center">
-						<div class="text-sm font-bold text-white">Nu ești într-o masă</div>
-						<p class="mt-2 text-xs text-white/60">
-							Întoarce-te în lobby pentru a crea sau intra într-o cameră.
-						</p>
-						<button
-							onclick={handleBackToLobby}
-							class="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-bold text-black"
-							>Înapoi la Lobby</button
-						>
-					</div>
+					{#if matchId}
+						<div class="text-center">
+							<div class="text-sm font-bold text-white">
+								Se conectează la masa {matchId.slice(0, 8)}…
+							</div>
+							<p class="mt-2 text-xs text-white/60">Aștepți snapshot de la server (1-2s)…</p>
+							<div class="mx-auto mt-3 h-1 w-32 overflow-hidden rounded bg-white/10">
+								<div class="h-full w-1/3 animate-pulse bg-emerald-500"></div>
+							</div>
+							<button onclick={handleBackToLobby} class="mt-3 text-xs text-white/60 underline"
+								>Înapoi la Lobby</button
+							>
+						</div>
+					{:else}
+						<div class="text-center">
+							<div class="text-sm font-bold text-white">Nu ești într-o masă</div>
+							<p class="mt-2 text-xs text-white/60">
+								Întoarce-te în lobby pentru a crea sau intra într-o cameră.
+							</p>
+							<button
+								onclick={handleBackToLobby}
+								class="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-bold text-black"
+								>Înapoi la Lobby</button
+							>
+						</div>
+					{/if}
 				{:else if isWaiting}
 					<div class="flex items-center justify-between">
 						<div>

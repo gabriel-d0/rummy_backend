@@ -60,12 +60,9 @@ func (m *RummyMatch) MatchJoinAttempt(ctx context.Context, logger runtime.Logger
 		logger.Error("MatchJoinAttempt bad state type %T", state)
 		return state, false, "bad state"
 	}
-	// Allow reconnection for existing players during Playing (or RoundComplete) — they keep their seat
+	// Allow reconnection for existing players in any phase — they keep seat and get PrivateView
 	for _, p := range st.Players {
 		if string(p.ID) == presence.GetUserId() {
-			if st.GamePhase == PhaseWaiting {
-				return state, false, "already joined"
-			}
 			logger.Info("Reconnection attempt for %s seat %v in phase %v", p.ID, p.Seat, st.GamePhase)
 			return state, true, ""
 		}

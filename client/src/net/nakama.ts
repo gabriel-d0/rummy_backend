@@ -1,7 +1,7 @@
 import { Client, Session } from "@heroiclabs/nakama-js";
 
-// Day 3: Nakama JS client dependency — device auth via defaultkey at 127.0.0.1:7350
-// Stores token in localStorage for reconnect, lazy inits socket.
+// Day 3, 22-24: Nakama JS client — device auth via defaultkey at 127.0.0.1:7350, socket, create/join match
+// Stores token/matchId in localStorage for reconnect, lazy inits socket.
 
 const HOST = (import.meta as any).env?.VITE_NAKAMA_HOST ?? "127.0.0.1";
 const PORT = (import.meta as any).env?.VITE_NAKAMA_PORT ?? "7350";
@@ -66,9 +66,26 @@ export async function createSocket(): Promise<any> {
   if (!socket) {
     socket = c.createSocket(false, false);
     await socket.connect(s, true);
-    console.log("Socket connected — Day 3");
+    console.log("Socket connected — Day 3 (Day 22)");
   }
   return socket;
+}
+
+export async function createMatch(): Promise<string> {
+  const sock = await createSocket();
+  const match = await sock.createMatch();
+  console.log(`Match created ${match.matchId} — Day 23`);
+  localStorage.setItem("rummy_matchId", match.matchId);
+  return match.matchId;
+}
+
+export async function joinMatch(matchId?: string): Promise<string> {
+  const sock = await createSocket();
+  const id = matchId ?? localStorage.getItem("rummy_matchId") ?? (await createMatch());
+  const match = await sock.joinMatch(id);
+  console.log(`Joined match ${match.matchId} — Day 24`);
+  localStorage.setItem("rummy_matchId", match.matchId);
+  return match.matchId;
 }
 
 export async function ensureAuthenticated(): Promise<Session> {

@@ -1,5 +1,10 @@
 import type { PrivateSnapshot, PublicSnapshot } from "./snapshot";
-import { checkNoLeak as checkNoLeakSnapshot } from "./snapshot";
+import {
+  SnapshotVersion,
+  isValidPublicSnapshot,
+  isValidPrivateSnapshot,
+  checkNoLeak as checkNoLeakSnapshot,
+} from "./snapshot";
 import { showErrorToast, type ServerError } from "../ui/ErrorToast";
 
 // Day 27: Receive match state — parses Envelope and routes op 100/101/102/103 to handlers
@@ -79,6 +84,17 @@ export function clearAllPrivate(): void {
 }
 
 export function onPrivateSnapshot(snap: PrivateSnapshot): void {
+  // Day 35: Version 1 check — if snap.v !== SnapshotVersion log bad_version and ignore (as in Go parser.go:22)
+  if (!isValidPrivateSnapshot(snap)) {
+    if ((snap as unknown as { v?: unknown })?.v !== SnapshotVersion) {
+      console.log(
+        `bad_version: PrivateSnapshot v=${(snap as unknown as { v?: unknown })?.v} want ${SnapshotVersion} — ignore — Day 35`
+      );
+    } else {
+      console.log("bad_version: invalid PrivateSnapshot — ignore — Day 35");
+    }
+    return;
+  }
   lastPrivateSnapshot = snap;
   lastPrivateBySeat.set(snap.ownSeat, snap);
   console.log(
@@ -103,6 +119,17 @@ export function onPrivateSnapshot(snap: PrivateSnapshot): void {
 }
 
 export function onPublicSnapshot(snap: PublicSnapshot): void {
+  // Day 35: Version 1 check
+  if (!isValidPublicSnapshot(snap)) {
+    if ((snap as unknown as { v?: unknown })?.v !== SnapshotVersion) {
+      console.log(
+        `bad_version: PublicSnapshot v=${(snap as unknown as { v?: unknown })?.v} want ${SnapshotVersion} — ignore — Day 35`
+      );
+    } else {
+      console.log("bad_version: invalid PublicSnapshot — ignore — Day 35");
+    }
+    return;
+  }
   lastPublicSnapshot = snap;
   console.log(
     `received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} tableMelds=${snap.tableMelds.length} discardRow=${snap.discardRow.length} — Day 31`
@@ -171,8 +198,28 @@ export function handleMatchData(opCode: number, data: Uint8Array | string): void
   }
   try {
     const envelope = JSON.parse(jsonStr);
+    // Day 35: Version 1 check for envelope (as in Go parser.go:22)
+    if (envelope.v !== undefined && envelope.v !== SnapshotVersion) {
+      console.log(
+        `bad_version: envelope v=${envelope.v} want ${SnapshotVersion} — ignore — Day 35`
+      );
+      return;
+    }
     const op = envelope.op ?? opCode;
     const payload = envelope.payload ?? envelope;
+    // Day 35: also check payload version for snapshots (op 100/101)
+    if (
+      (op === 100 || op === 101) &&
+      payload &&
+      typeof payload === "object" &&
+      (payload as { v?: unknown }).v !== undefined &&
+      (payload as { v?: unknown }).v !== SnapshotVersion
+    ) {
+      console.log(
+        `bad_version: payload v=${(payload as { v?: unknown }).v} want ${SnapshotVersion} — ignore — Day 35`
+      );
+      return;
+    }
     // Merge envelope requestId/op into payload for OpServerError correlation (Day 28)
     const mergeError = (p: unknown): ServerError => {
       const obj = (p ?? {}) as Record<string, unknown>;

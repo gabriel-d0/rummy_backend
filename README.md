@@ -258,3 +258,11 @@ Backend MVP complete through `Day 24` minimal client and final regression (`rumm
 ---
 
 *Stack: Nakama 3.26.0 (`go1.23.5`) on `postgres:15-alpine`, Go 1.23.5 plugin (`rummy_backend.so`), Docker Compose `rummy_backend:local`.*
+
+## Next Steps (Client Day 5 — SvelteKit)
+
+Client `client/` is now SvelteKit minimal at Day 5 with `VITE_NAKAMA_*` env and Quick Start:
+
+- `cd client && npm install && cp .env.example .env && npm run dev -- --open` at `http://localhost:5173`
+- `npm run check` / `lint` / `test:unit` / `test:e2e` / `build` green per `client/docs/roadmap.md` Phase 1 Day 5
+- Next is **Day 6 — Smoke test** (`client/tests/smoke.spec.ts` verifies `npm run dev` serves `200` at `5173`)

@@ -65,8 +65,17 @@ export async function createSocket(): Promise<any> {
   const s = getSession() ?? (await authenticate());
   if (!socket) {
     socket = c.createSocket(false, false);
+    // Day 27: Receive match state — parse Envelope and route op 100/101/102/103
+    socket.onmatchdata = (matchData: any) => {
+      const opCode = matchData.op_code ?? matchData.opCode ?? 0;
+      const data = matchData.data;
+      // Dynamically import to avoid circular deps
+      import("../state/sync").then(({ handleMatchData }) => {
+        handleMatchData(opCode, data);
+      });
+    };
     await socket.connect(s, true);
-    console.log("Socket connected — Day 3 (Day 22)");
+    console.log("Socket connected — Day 3 (Day 22) with onmatchdata handler Day 27");
   }
   return socket;
 }

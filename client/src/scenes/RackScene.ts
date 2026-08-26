@@ -41,7 +41,7 @@ export class RackScene extends Phaser.Scene {
       }
     });
     this.add
-      .text(512, 620, "RackScene — Day 19 discardSelected(1) + Day 17 dragstart", {
+      .text(512, 600, "Rack — Day 19 discardSelected + Day 17 dragstart (click tile, then [Discard])", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",

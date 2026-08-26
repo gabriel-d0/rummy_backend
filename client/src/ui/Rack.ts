@@ -45,9 +45,12 @@ export function renderRack(
   seat: number,
   opts?: { x?: number; y?: number; spacing?: number },
 ): Phaser.GameObjects.Image[] {
-  const x0 = opts?.x ?? 100;
-  const y = opts?.y ?? 680;
-  const spacing = opts?.spacing ?? 50;
+  const spacing = opts?.spacing ?? 54;
+  const y = opts?.y ?? 700;
+  // Center the rack within the wood rack image (800x120 at 512,680)
+  // Rack left edge is at 512-400=112, but we center tiles at 512
+  const totalWidth = tiles.length > 0 ? (tiles.length - 1) * spacing : 0;
+  const x0 = (opts?.x ?? 512) - totalWidth / 2;
   // Clear previous rack images if any (tagged with "rack-tile")
   const existing = scene.children.list.filter((c) => (c as any).getData?.("isRackTile"));
   for (const c of existing) c.destroy();

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ASSET_MANIFEST } from "./assets";
 
 export class Preload extends Phaser.Scene {
   constructor() {
@@ -6,18 +7,14 @@ export class Preload extends Phaser.Scene {
   }
 
   preload() {
-    // Day 6: Preload scene loads a single 1x1 tile sprite (placeholder)
-    // Day 7: Add tile.png for red-1 and joker.png for Joly
-    this.load.image("tile", "assets/tile.png");
-    this.load.image("joker", "assets/joker.png");
-    // Day 8: Add table.png (green felt 1024x768)
-    this.load.image("table", "assets/table.png");
-    // Day 9: Add rack.png (wood 800x120 with 14 slots)
-    this.load.image("rack", "assets/rack.png");
+    // Day 10: Asset manifest — single source of truth for all 4 assets
+    for (const [key, path] of Object.entries(ASSET_MANIFEST)) {
+      this.load.image(key, path);
+    }
   }
 
   create() {
-    console.log("Preload complete — Day 9 tile + joker + table + rack loaded");
+    console.log("Preload complete — Day 10 manifest tile + joker + table + rack loaded");
     this.scene.start("TableScene");
     this.scene.launch("RackScene");
   }

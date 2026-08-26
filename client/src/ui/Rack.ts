@@ -50,6 +50,10 @@ export function renderRack(
     img.setData("tileId", tl.ID);
     img.setData("seat", seat);
     img.setInteractive({ useHandCursor: true });
+    // Day 17: make draggable and log dragstart (no drop yet)
+    if ((scene.input as any).setDraggable) {
+      scene.input.setDraggable(img);
+    }
     // Day 16: tint if selected
     if (isSelected(tl.ID)) {
       img.setTint(0xffff00);

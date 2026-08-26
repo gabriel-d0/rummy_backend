@@ -18,14 +18,19 @@ export class RackScene extends Phaser.Scene {
     ];
     const mockRack = sortRack(unsorted);
     renderRack(this, mockRack, 0);
+    // Day 17: dragstart logs tileId, no drop yet
+    this.input.on("dragstart", (_pointer: any, gameObject: any) => {
+      const tileId = gameObject.getData("tileId");
+      console.log(`dragstart ${tileId}`);
+    });
     this.add
-      .text(512, 620, "RackScene — Day 16 onTileClicked(tint 0xffff00) + sortRack", {
+      .text(512, 620, "RackScene — Day 17 dragstart(tileId) + Day 16 onTileClicked", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    // Day 17-20: dragstart, discardSelected, meldSelected
+    // Day 18-20: discardSelected, meldSelected
   }
 }

@@ -1,10 +1,11 @@
 import { Client, Session } from '@heroiclabs/nakama-js';
+import { NAKAMA_HOST, NAKAMA_PORT, NAKAMA_KEY, NAKAMA_USE_SSL } from '$lib/config';
 
-// Day 4: Nakama JS client — hardcoded 127.0.0.1:7350 defaultkey (env wiring Day 6)
-const HOST = '127.0.0.1';
-const PORT = '7350';
-const KEY = 'defaultkey';
-const USE_SSL = false;
+// Day 6: wired to $lib/config via $env/static/public PUBLIC_NAKAMA_* with fallback 127.0.0.1:7350 defaultkey
+const HOST = NAKAMA_HOST;
+const PORT = NAKAMA_PORT;
+const KEY = NAKAMA_KEY;
+const USE_SSL = NAKAMA_USE_SSL;
 
 function getOrCreateDeviceId(): string {
 	const key = 'rummy_device_id';

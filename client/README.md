@@ -1,42 +1,39 @@
-# sv
+# Rummy Client — SvelteKit
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit + Tailwind + Nakama JS client for Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening, Version 1). Day 6 — Env wiring with `VITE_NAKAMA_*` / `PUBLIC_NAKAMA_*`.
 
-## Creating a project
+## Quick Start
 
-If you're seeing this, you've probably already done this step. Congrats!
+```bash
+# 1. Backend up (from repo root)
+docker compose up --build -d && make smoke
 
-```sh
-# create a new project
-npx sv create my-app
+# 2. Client (from client/)
+cd client
+npm install
+cp .env.example .env # optional — defaults are 127.0.0.1:7350 defaultkey
+npm run dev -- --open # http://localhost:5173
+
+# 3. Check
+npm run check # svelte-check
+npm run lint # prettier --check + eslint
+npm run test:unit -- --run # vitest
+npm run test:e2e # playwright
+npm run build # vite build
 ```
 
-To recreate this project with the same configuration:
+## Env
+
+`PUBLIC_NAKAMA_HOST` `PUBLIC_NAKAMA_PORT` `PUBLIC_NAKAMA_KEY` `PUBLIC_NAKAMA_USE_SSL` — see `.env.example`. `PUBLIC_NAKAMA_KEY` must be `defaultkey` for local Nakama (`defaultkey:` not `defaulthttpkey:`). `VITE_NAKAMA_*` kept for compat.
+
+## Docs
+
+- `client/docs/roadmap.md` — Day 6 Env & docs
+- `../docs/protocol.md` — opcodes 1..9/100..103, Version 1, envelope
+- `../docs/state-machine.md` — GamePhase/TurnPhase AllowedOps
+
+## Re-create
 
 ```sh
-# recreate this project
 npx sv@0.17.0 create --template minimal --types ts --add prettier eslint vitest="usages:unit" playwright tailwindcss="plugins:none" --install npm client
 ```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

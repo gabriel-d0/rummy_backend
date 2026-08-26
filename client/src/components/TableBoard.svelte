@@ -1,0 +1,89 @@
+<script lang="ts">
+  import Tile from "./Tile.svelte";
+
+  type Meld = {
+    id: string;
+    kind: "run" | "set";
+    tiles: { colour: number; rank: number; isJoker?: boolean; id: string }[];
+    points?: number;
+  };
+
+  let { melds = [
+    {
+      id: "m1",
+      kind: "run",
+      tiles: [
+        { id: "a1", colour: 1, rank: 5, isJoker: false },
+        { id: "a2", colour: 1, rank: 6, isJoker: false },
+        { id: "a3", colour: 1, rank: 7, isJoker: false },
+        { id: "a4", colour: 1, rank: 8, isJoker: false },
+        { id: "a5", colour: 1, rank: 9, isJoker: false },
+        { id: "a6", colour: 1, rank: 10, isJoker: false }
+      ],
+      points: 66
+    },
+    {
+      id: "m2",
+      kind: "set",
+      tiles: [
+        { id: "b1", colour: 2, rank: 7, isJoker: false },
+        { id: "b2", colour: 1, rank: 7, isJoker: false },
+        { id: "b3", colour: 3, rank: 7, isJoker: false }
+      ],
+      points: 53
+    },
+    {
+      id: "m3",
+      kind: "set",
+      tiles: [
+        { id: "c1", colour: 1, rank: 7, isJoker: false },
+        { id: "c2", colour: 1, rank: 7, isJoker: false },
+        { id: "c3", colour: 2, rank: 7, isJoker: true },
+        { id: "c4", colour: 3, rank: 7, isJoker: false }
+      ],
+      points: 55
+    }
+  ] } = $props<{ melds?: Meld[] }>();
+</script>
+
+<div class="w-full rounded-[18px] border border-[#e8e0c8] bg-[#f5f1e8] p-3 shadow-inner sm:p-4 flex flex-col gap-2.5 min-h-[280px]">
+  <div class="flex items-center justify-between text-[11px] font-semibold tracking-widest text-[#8a7a5a]">
+    <span>ETALĂRI PE MASĂ • {melds.length} SETURI</span>
+    <span class="hidden text-[10px] font-normal sm:inline">Prima etalare min 45 pct</span>
+  </div>
+  <div class="flex flex-1 flex-col gap-2.5 content-start">
+    <div class="flex flex-wrap gap-2.5">
+      {#each melds.slice(0, 2) as meld (meld.id)}
+        <div class="flex items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur flex-wrap">
+          <div class="flex gap-1 flex-wrap">
+            {#each meld.tiles as t (t.id)}
+              <Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+            {/each}
+          </div>
+          {#if meld.points}
+            <div class="ml-1 whitespace-nowrap rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white sm:ml-2">
+              {meld.points} pct
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+    <div class="flex flex-wrap gap-2.5">
+      {#each melds.slice(2) as meld (meld.id)}
+        <div class="flex items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur flex-wrap">
+          <div class="flex gap-1 flex-wrap">
+            {#each meld.tiles as t (t.id)}
+              <Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+            {/each}
+          </div>
+          {#if meld.points}
+            <div class="ml-1 whitespace-nowrap rounded-full bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white sm:ml-2">
+              {meld.points} pct
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+    <div class="min-h-[40px] flex-1"></div>
+  </div>
+</div>

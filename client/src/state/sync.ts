@@ -9,6 +9,7 @@ let lastPrivateSnapshot: PrivateSnapshot | null = null;
 let lastPublicSnapshot: PublicSnapshot | null = null;
 
 const privateListeners: ((snap: PrivateSnapshot) => void)[] = [];
+const publicListeners: ((snap: PublicSnapshot) => void)[] = [];
 
 export function subscribePrivateSnapshot(cb: (snap: PrivateSnapshot) => void): () => void {
   privateListeners.push(cb);
@@ -25,9 +26,28 @@ export function subscribePrivateSnapshot(cb: (snap: PrivateSnapshot) => void): (
   };
 }
 
+export function subscribePublicSnapshot(cb: (snap: PublicSnapshot) => void): () => void {
+  publicListeners.push(cb);
+  if (lastPublicSnapshot) {
+    try {
+      cb(lastPublicSnapshot);
+    } catch {
+      // ignore
+    }
+  }
+  return () => {
+    const idx = publicListeners.indexOf(cb);
+    if (idx !== -1) publicListeners.splice(idx, 1);
+  };
+}
+
 // For tests: clear listeners without affecting stored snapshot
 export function clearPrivateListeners(): void {
   privateListeners.length = 0;
+}
+
+export function clearPublicListeners(): void {
+  publicListeners.length = 0;
 }
 
 export function onPrivateSnapshot(snap: PrivateSnapshot): void {
@@ -51,7 +71,16 @@ export function onPrivateSnapshot(snap: PrivateSnapshot): void {
 
 export function onPublicSnapshot(snap: PublicSnapshot): void {
   lastPublicSnapshot = snap;
-  console.log(`received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} — Day 30`);
+  console.log(
+    `received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} tableMelds=${snap.tableMelds.length} discardRow=${snap.discardRow.length} — Day 31`
+  );
+  for (const cb of [...publicListeners]) {
+    try {
+      cb(snap);
+    } catch (e) {
+      console.log("publicListener error", e);
+    }
+  }
 }
 
 export function onServerError(error: ServerError): void {

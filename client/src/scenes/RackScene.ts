@@ -1,11 +1,12 @@
 import Phaser from "phaser";
 import { discardSelected, meldSelected, renderRack, sortRack, clearSelected } from "../ui/Rack";
 import { getLayout } from "../ui/Layout";
-import { subscribePrivateSnapshot, canPlayerAct } from "../state/sync";
+import { subscribePrivateSnapshot, canPlayerAct, canDrawPrevious } from "../state/sync";
 import type { PrivateSnapshot } from "../state/snapshot";
 import {
   OpClientDiscard,
   OpClientDrawStock,
+  OpClientDrawPreviousDiscard,
   OpClientMeldInitial,
   OpClientMeldNew,
 } from "../net/protocol";
@@ -46,20 +47,23 @@ export class RackScene extends Phaser.Scene {
     discardBtn: Phaser.GameObjects.Text,
     meldRunBtn: Phaser.GameObjects.Text,
     meldSetBtn: Phaser.GameObjects.Text,
-    drawBtn?: Phaser.GameObjects.Text
+    drawBtn?: Phaser.GameObjects.Text,
+    drawPrevBtn?: Phaser.GameObjects.Text
   ): void {
     const canDiscard = canPlayerAct(snap, OpClientDiscard);
     const canMeldInitial = canPlayerAct(snap, OpClientMeldInitial);
     const canMeldNew = canPlayerAct(snap, OpClientMeldNew);
     const canMeld = canMeldInitial || canMeldNew;
     const canDraw = snap ? canPlayerAct(snap, OpClientDrawStock) : false;
+    const canPrev = snap ? canDrawPrevious(snap) : false;
     this.setButtonEnabled(discardBtn, canDiscard);
     this.setButtonEnabled(meldRunBtn, canMeld);
     this.setButtonEnabled(meldSetBtn, canMeld);
     if (drawBtn) this.setButtonEnabled(drawBtn, canDraw);
+    if (drawPrevBtn) this.setButtonEnabled(drawPrevBtn, canPrev);
     // Also log for e2e
     console.log(
-      `Day 36 button states: discard=${canDiscard} meld=${canMeld} draw=${canDraw} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
+      `Day 36 button states: discard=${canDiscard} meld=${canMeld} draw=${canDraw} prev=${canPrev} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
     );
   }
 
@@ -187,6 +191,44 @@ export class RackScene extends Phaser.Scene {
       }
     });
 
+    // Day 40: DrawPrevious button — visible only if HasOpened and DiscardRow not empty and not IsOpeningDiscard, sends OpClientDrawPreviousDiscard 4 {}
+    const drawPrevBtn = this.add
+      .text(btnX - 410, btnY, "[Prev]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#1a3d2e",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .setAlpha(0.5)
+      .disableInteractive();
+    drawPrevBtn.setData("isDrawPrevBtn", true);
+    drawPrevBtn.on("pointerdown", async () => {
+      if (drawPrevBtn.alpha < 1) return;
+      try {
+        const sock = await createSocket();
+        const matchId = getStoredMatchId();
+        if (!matchId) {
+          console.log("drawPrev failed: no matchId");
+          return;
+        }
+        drawPrevBtn.disableInteractive();
+        drawPrevBtn.setAlpha(0.5);
+        await sendMatchState(
+          sock,
+          matchId,
+          OpClientDrawPreviousDiscard,
+          {},
+          `req-prev-${Date.now()}`
+        );
+        console.log("sent OpClientDrawPreviousDiscard — Day 40");
+      } catch (e) {
+        console.log("drawPrev failed", e);
+      }
+    });
+
     // Day 20: Meld buttons — validate selected.size>=3 and log MELD_INITIAL or MELD_NEW
     const meldRunBtn = this.add
       .text(btnX - 110, btnY, "[Meld Run]", {
@@ -221,10 +263,11 @@ export class RackScene extends Phaser.Scene {
     // Day 36: also update button states per CurrentSeat/TurnPhase/HasOpened
     // Day 38: track latestPrivate for opening discard handler
     // Day 39: also update Draw button per MustDraw
+    // Day 40: also update Prev button per HasOpened+DiscardRow
     const unsubscribe = subscribePrivateSnapshot((snap) => {
       latestPrivate = snap;
       this.renderPrivateRack(snap);
-      this.updateButtonStates(snap, discardBtn, meldRunBtn, meldSetBtn, drawBtn);
+      this.updateButtonStates(snap, discardBtn, meldRunBtn, meldSetBtn, drawBtn, drawPrevBtn);
     });
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);

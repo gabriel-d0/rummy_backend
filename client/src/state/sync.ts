@@ -238,6 +238,15 @@ export function canPlayerAct(snap: PrivateSnapshot, op: number): boolean {
   return true;
 }
 
+// Day 40: DrawPrevious helper — also checks discardRow not empty and not IsOpeningDiscard
+export function canDrawPrevious(snap: PrivateSnapshot): boolean {
+  if (!canPlayerAct(snap, OpClientDrawPreviousDiscard)) return false;
+  if (snap.discardRow.length === 0) return false;
+  const last = snap.discardRow[snap.discardRow.length - 1];
+  if (last.IsOpeningDiscard) return false;
+  return true;
+}
+
 export function onServerError(error: ServerError): void {
   // Store and toast via ErrorToast (Day 28)
   try {

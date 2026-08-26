@@ -54,7 +54,7 @@ function createMockSocket(): Socket {
 		connect: async () => {},
 		disconnect: async () => {},
 		createMatch: async () => ({ match: { matchId: 'mock-match' } }),
-		joinMatch: async () => ({ match: { matchId: 'mock-match' } }),
+		joinMatch: async (matchId: string) => ({ match: { matchId: matchId || 'mock-match' } }),
 		leaveMatch: async () => {},
 		sendMatchState: async () => ({})
 	} as unknown as Socket;

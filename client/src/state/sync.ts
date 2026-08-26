@@ -1,4 +1,5 @@
 import type { PrivateSnapshot, PublicSnapshot } from "./snapshot";
+import { checkNoLeak as checkNoLeakSnapshot } from "./snapshot";
 import { showErrorToast, type ServerError } from "../ui/ErrorToast";
 
 // Day 27: Receive match state — parses Envelope and routes op 100/101/102/103 to handlers
@@ -74,6 +75,17 @@ export function onPublicSnapshot(snap: PublicSnapshot): void {
   console.log(
     `received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} tableMelds=${snap.tableMelds.length} discardRow=${snap.discardRow.length} — Day 31`
   );
+  // Day 32: redaction check — ensure PublicSnapshot JSON does not contain OwnRack IDs (as in visibility_test.go)
+  if (lastPrivateSnapshot) {
+    const privateIds = lastPrivateSnapshot.ownRack.map((t) => t.ID);
+    const publicJson = JSON.stringify(snap);
+    const ok = checkNoLeakSnapshot(publicJson, privateIds);
+    if (ok) {
+      console.log("checkNoLeak: no leak — PublicSnapshot does not contain OwnRack IDs");
+    } else {
+      console.log("LEAKED: PublicSnapshot contains OwnRack ID — redaction failure");
+    }
+  }
   for (const cb of [...publicListeners]) {
     try {
       cb(snap);
@@ -81,6 +93,17 @@ export function onPublicSnapshot(snap: PublicSnapshot): void {
       console.log("publicListener error", e);
     }
   }
+}
+
+// Day 32: client-side redaction check — mirrors Go visibility_test.go string search for OwnRack IDs
+export function checkNoLeak(publicJson: string, privateIds: string[]): boolean {
+  const ok = checkNoLeakSnapshot(publicJson, privateIds);
+  if (ok) {
+    console.log("checkNoLeak: no leak");
+  } else {
+    console.log("LEAKED: publicJson contains privateId");
+  }
+  return ok;
 }
 
 export function onServerError(error: ServerError): void {

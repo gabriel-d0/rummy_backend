@@ -80,7 +80,9 @@
 			// initial poll
 			refreshMatches();
 		})();
-		// no auto interval — user clicks reîmprospătează, avoids reload loop
+		// auto poll Camere disponibile every 2.5s when in lobby (no reload)
+		const interval = setInterval(refreshMatches, 2500);
+		return () => clearInterval(interval);
 	});
 
 	async function handleCreate() {

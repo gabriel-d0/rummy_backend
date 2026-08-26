@@ -1,4 +1,5 @@
 import type Phaser from "phaser";
+import { textStyle } from "./fonts";
 
 /**
  * Day 4 — LayoutManager — mathematically stable, fully responsive layout system.
@@ -177,7 +178,7 @@ export function onGameResize(scene: Phaser.Scene, cb: (subspaces: Subspaces) => 
   });
 }
 
-// 5. Debug helper — draw subspace bounds for visual verification (Inter, readable)
+// 5. Debug helper — draw subspace bounds for visual verification (uses Font System)
 export function drawDebugSubspaces(scene: Phaser.Scene, subspaces: Subspaces, alpha = 0.04): void {
   const colors: Record<keyof Subspaces, number> = {
     TopBar: 0xff6b6b,
@@ -190,14 +191,7 @@ export function drawDebugSubspaces(scene: Phaser.Scene, subspaces: Subspaces, al
   for (const [name, rect] of Object.entries(subspaces) as [keyof Subspaces, Rect][]) {
     const r = scene.add.rectangle(rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width, rect.height, colors[name], alpha).setStrokeStyle(1.5, colors[name], 0.6);
     r.setData("isDebugSubspace", true);
-    const label = scene.add.text(rect.x + 6, rect.y + 6, name, {
-      fontFamily: "Inter, system-ui, sans-serif",
-      fontSize: "9px",
-      color: "#ffffff",
-      fontStyle: "600",
-      backgroundColor: "#0a2e1a99",
-      padding: { x: 4, y: 2 },
-    });
+    const label = scene.add.text(rect.x + 6, rect.y + 6, name, textStyle("debug"));
     label.setData("isDebugSubspace", true);
   }
 }

@@ -7,7 +7,8 @@
 		sendDrawStock,
 		sendDrawPreviousDiscard,
 		sendPickupDiscardForMeld,
-		sendMeldInitial
+		sendMeldInitial,
+		sendMeldNew
 	} from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
@@ -175,14 +176,30 @@
 		return true;
 	});
 
+	// Day 36 — Meld new: HasOpened selected>=3 Playing MeldOrDiscard myTurn
+	const canMeldNew = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return selected.size >= 3;
+		if (!hasOpened) return false;
+		if (!isPlaying || !isMeldOrDiscard || !isMyTurn) return false;
+		if (selected.size < 3) return false;
+		return true;
+	});
+
+	const canMeld = $derived(canMeldInitial || canMeldNew);
+
 	async function meldInitial() {
-		if (!canMeldInitial || melding) return;
+		if (!canMeld || melding) return;
 		const ids = [...selected];
 		if (ids.length < 3) return;
 		melding = true;
 		try {
-			// For Day 35 we send as single run meld; server validates 50+ and ≥1 run
-			await sendMeldInitial([{ kind: 'run', tileIds: ids }]);
+			if (hasOpened) {
+				await sendMeldNew([{ kind: 'run', tileIds: ids }]);
+			} else {
+				// For Day 35 we send as single run meld; server validates 50+ and ≥1 run
+				await sendMeldInitial([{ kind: 'run', tileIds: ids }]);
+			}
 			selected.clear();
 		} catch (_err) {
 			void _err;
@@ -272,10 +289,10 @@
 		>
 		<button
 			onclick={meldInitial}
-			disabled={!canMeldInitial || melding}
+			disabled={!canMeld || melding}
 			data-testid="meld-initial-btn"
 			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
-				{canMeldInitial
+				{canMeld
 				? 'bg-indigo-600 text-white hover:bg-indigo-500'
 				: 'cursor-not-allowed bg-white/10 text-white/40'}">ETALEAZĂ SELECTATE</button
 		>

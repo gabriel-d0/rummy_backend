@@ -2,7 +2,7 @@
 # Phase 1 Day 4+7: start, stop, logs, clean/reset, build, test, lint, type-check, format + smoke
 # Usage: `make help` for list; all targets are explicit and non-magic per Handmade Hero.
 
-.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt fmt-check test tidy health smoke check client-lint client-typecheck client-build
+.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt fmt-check test tidy health smoke check client-lint client-typecheck client-build client-smoke
 
 # Default: show help
 help:
@@ -36,6 +36,7 @@ help:
 	@echo "  make client-lint - lint client (eslint src --ext .ts, Day 4)"
 	@echo "  make client-typecheck - typecheck client (tsc --noEmit, Day 4)"
 	@echo "  make client-build - build client (tsc --noEmit && vite build, Day 4)"
+	@echo "  make client-smoke - smoke client (build + dev 200 + Preload + nakama auth, Day 6)"
 	@echo ""
 
 # --- Docker ---
@@ -133,3 +134,6 @@ client-build:
 
 client-fmt:
 	@cd client && npm run fmt
+
+client-smoke:
+	@./client/scripts/smoke.sh

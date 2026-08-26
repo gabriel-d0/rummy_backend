@@ -8,7 +8,7 @@ import {
 import { OpServerState, OpServerStatePublic } from '../nakama/protocol';
 import { setMatchDataHandler } from '../nakama/socket';
 
-// Day 22 — Game store — private — Svelte writable PrivateSnapshot|null, onPrivateSnapshot, lastPrivate, derived isMyTurn
+// Day 22-23 — Game store — private + public — Svelte writable Private/Public Snapshot, onPrivateSnapshot/onPublicSnapshot, lastPrivate, derived isMyTurn, TableBoard subscribes
 
 export const privateStore = writable<PrivateSnapshot | null>(null);
 export const publicStore = writable<PublicSnapshot | null>(null);

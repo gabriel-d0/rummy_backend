@@ -36,7 +36,7 @@ function makePrivate(
 	};
 }
 
-describe('Game store — Day 22 private', () => {
+describe('Game store — Day 22-23 private + public', () => {
 	beforeEach(() => {
 		const store = new Map<string, string>();
 		(globalThis as unknown as Record<string, unknown>).localStorage = {
@@ -165,6 +165,58 @@ describe('Game store — Day 22 private', () => {
 		expect(ok).toBe(true);
 		expect(get(publicStore)!.tableMelds.length).toBe(1);
 		// private remains null
+		expect(get(privateStore)).toBeNull();
+	});
+
+	it('publicStore holds TableMelds 2 and not OwnRack — Day 23', () => {
+		const pub = {
+			v: 1,
+			gamePhase: 'Playing',
+			turnPhase: 'MeldOrDiscard',
+			currentSeat: 0,
+			players: [
+				{ id: 'alice', seat: 0, hasOpened: true, rackCount: 6 },
+				{ id: 'bob', seat: 1, hasOpened: false, rackCount: 14 }
+			],
+			stockCount: 68,
+			discardRow: [],
+			tableMelds: [
+				{
+					ID: 'm1',
+					Kind: 'run',
+					Tiles: [
+						{ ID: 'r1', Colour: 1, Rank: 5, IsJoker: false },
+						{ ID: 'r2', Colour: 1, Rank: 6, IsJoker: false },
+						{ ID: 'r3', Colour: 1, Rank: 7, IsJoker: false }
+					],
+					JokerReps: {},
+					OwnerSeat: 0
+				},
+				{
+					ID: 'm2',
+					Kind: 'set',
+					Tiles: [
+						{ ID: 's1', Colour: 1, Rank: 9, IsJoker: false },
+						{ ID: 's2', Colour: 2, Rank: 9, IsJoker: false },
+						{ ID: 's3', Colour: 3, Rank: 9, IsJoker: false }
+					],
+					JokerReps: {},
+					OwnerSeat: 1
+				}
+			],
+			winner: -1
+		};
+		const ok = handleMatchData(OpServerStatePublic, JSON.stringify(pub));
+		expect(ok).toBe(true);
+		const stored = get(publicStore)!;
+		expect(stored.tableMelds.length).toBe(2);
+		expect(stored.tableMelds[0].ID).toBe('m1');
+		expect(stored.tableMelds[1].Kind).toBe('set');
+		// TableBoard subscribes, not OwnRack
+		expect((stored as unknown as Record<string, unknown>).ownRack).toBeUndefined();
+		expect(JSON.stringify(stored)).not.toContain('ownRack');
+		expect(JSON.stringify(stored)).not.toContain('alice-secret');
+		// private remains null after public-only update
 		expect(get(privateStore)).toBeNull();
 	});
 });

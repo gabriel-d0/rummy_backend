@@ -8,19 +8,50 @@ import { showErrorToast, type ServerError } from "../ui/ErrorToast";
 let lastPrivateSnapshot: PrivateSnapshot | null = null;
 let lastPublicSnapshot: PublicSnapshot | null = null;
 
+const privateListeners: ((snap: PrivateSnapshot) => void)[] = [];
+
+export function subscribePrivateSnapshot(cb: (snap: PrivateSnapshot) => void): () => void {
+  privateListeners.push(cb);
+  if (lastPrivateSnapshot) {
+    try {
+      cb(lastPrivateSnapshot);
+    } catch {
+      // ignore listener error during immediate replay
+    }
+  }
+  return () => {
+    const idx = privateListeners.indexOf(cb);
+    if (idx !== -1) privateListeners.splice(idx, 1);
+  };
+}
+
+// For tests: clear listeners without affecting stored snapshot
+export function clearPrivateListeners(): void {
+  privateListeners.length = 0;
+}
+
 export function onPrivateSnapshot(snap: PrivateSnapshot): void {
   lastPrivateSnapshot = snap;
   console.log(
-    `received op 100 PrivateSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} ownSeat=${snap.ownSeat} rack=${snap.ownRack.length} — Day 27`
+    `received op 100 PrivateSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} ownSeat=${snap.ownSeat} rack=${snap.ownRack.length} — Day 30`
   );
-  // In a real scene, this would trigger RackScene re-render and TableScene re-render
-  // For Day 27, we just log and store for reconnection
-  localStorage.setItem("rummy_lastPrivate", JSON.stringify(snap));
+  try {
+    localStorage.setItem("rummy_lastPrivate", JSON.stringify(snap));
+  } catch {
+    // ignore in node test env where localStorage is mocked or missing
+  }
+  for (const cb of [...privateListeners]) {
+    try {
+      cb(snap);
+    } catch (e) {
+      console.log("privateListener error", e);
+    }
+  }
 }
 
 export function onPublicSnapshot(snap: PublicSnapshot): void {
   lastPublicSnapshot = snap;
-  console.log(`received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} — Day 27`);
+  console.log(`received op 101 PublicSnapshot v=${snap.v} gamePhase=${snap.gamePhase} — Day 30`);
 }
 
 export function onServerError(error: ServerError): void {

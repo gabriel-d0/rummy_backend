@@ -125,3 +125,71 @@ export async function ensureAuthenticated(): Promise<Session> {
   if (session) return session;
   return authenticate();
 }
+
+// Day 34: reconnect — socket.connect + joinMatch(matchId) and expect OpServerState 100 PrivateSnapshot for that Seat only
+// Mirrors Go rummy_match.go:79 — MatchLeave keeps Players/Racks, MatchJoin re-sends PrivateView to that Seat only
+export async function reconnect(): Promise<string | null> {
+  const storedMatchId = localStorage.getItem("rummy_matchId");
+  const storedToken = localStorage.getItem("rummy_token");
+  if (!storedMatchId) {
+    console.log("reconnect: no stored matchId — cannot rejoin");
+    return null;
+  }
+  if (!storedToken) {
+    console.log("reconnect: no stored token — re-authenticating");
+  }
+  try {
+    const sock = await createSocket();
+    // If socket is already created but disconnected, try to re-connect
+    try {
+      const sess = getSession() ?? (await authenticate());
+      // Only reconnect if not already connected — check for isConnected or similar
+      // For Day 34 we just attempt to connect again (idempotent)
+      if (typeof sock.connect === "function") {
+        try {
+          await sock.connect(sess, true);
+        } catch {
+          // ignore if already connected
+        }
+      }
+    } catch {
+      // ignore connect errors, proceed to join
+    }
+    const match = await sock.joinMatch(storedMatchId);
+    const joinedId = match.matchId ?? storedMatchId;
+    localStorage.setItem("rummy_matchId", joinedId);
+    console.log(
+      `Reconnected — Day 34 rejoin ${joinedId} expecting OpServerState 100 PrivateSnapshot for ownSeat`
+    );
+    // The server will send PrivateSnapshot via onmatchdata, which will be handled by sync.ts
+    // and rehydrated in RackScene via subscribePrivateSnapshot immediate replay from localStorage per-Seat
+    return joinedId;
+  } catch (e) {
+    console.log("reconnect failed", e);
+    return null;
+  }
+}
+
+export function getStoredMatchId(): string | null {
+  try {
+    return localStorage.getItem("rummy_matchId");
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredUserId(): string | null {
+  try {
+    return localStorage.getItem("rummy_userId");
+  } catch {
+    return null;
+  }
+}
+
+export function isReconnectionAvailable(): boolean {
+  try {
+    return !!localStorage.getItem("rummy_matchId") && !!localStorage.getItem("rummy_userId");
+  } catch {
+    return false;
+  }
+}

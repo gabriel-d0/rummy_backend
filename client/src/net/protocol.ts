@@ -13,3 +13,18 @@ export const OpServerState = 100;
 export const OpServerStatePublic = 101;
 export const OpServerError = 102;
 export const OpServerEvent = 103;
+
+export interface Envelope {
+  v: number;
+  op: number;
+  requestId?: string;
+  payload?: unknown;
+}
+
+export function NewEnvelope(op: number, payload?: unknown, requestId?: string): string {
+  return JSON.stringify({ v: Version, op, requestId, payload });
+}
+
+export function NewEnvelopeWithRequestId(op: number, requestId: string, payload?: unknown): string {
+  return JSON.stringify({ v: Version, op, requestId, payload });
+}

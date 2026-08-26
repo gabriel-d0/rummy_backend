@@ -19,7 +19,7 @@
 {#if isWinner}
 	<div
 		data-testid="winner-overlay"
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none"
+		class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
 	>
 		<div class="pointer-events-auto rounded-2xl bg-white p-6 text-center shadow-2xl">
 			<div class="text-sm font-bold tracking-widest text-emerald-600">CÂȘTIGĂTOR</div>

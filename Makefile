@@ -33,10 +33,10 @@ help:
 	@echo "  make smoke       - full smoke: DB+nakama healthy, runtime loaded, DB conn, console+RPC (scripts/smoke.sh)"
 	@echo "  make cli         - run minimal Rummy CLI (local simulation, 2 players, shows Private vs Public)"
 	@echo "  make cli-help    - show CLI help"
-	@echo "  make client-lint - lint client (eslint src --ext .ts, Day 4)"
-	@echo "  make client-typecheck - typecheck client (tsc --noEmit, Day 4)"
-	@echo "  make client-build - build client (tsc --noEmit && vite build, Day 4)"
-	@echo "  make client-smoke - smoke client (build + dev 200 + Preload + nakama auth, Day 6)"
+	@echo "  make client-lint - lint client (prettier --check + eslint, Day 4 SvelteKit)"
+	@echo "  make client-typecheck - typecheck client (svelte-check, Day 4 SvelteKit)"
+	@echo "  make client-build - build client (vite build, Day 4 SvelteKit)"
+	@echo "  make client-smoke - smoke client (playwright e2e Day 2, Day 4 SvelteKit)"
 	@echo ""
 
 # --- Docker ---
@@ -122,18 +122,18 @@ cli:
 cli-help:
 	@go run ./cmd/rummy-cli --help
 
-# --- Client (Phaser) — Day 4 Project structure and lint/format ---
+# --- Client (SvelteKit) — Day 1-4 SvelteKit + Tailwind + Playwright ---
 client-lint:
 	@cd client && npm run lint
 
 client-typecheck:
-	@cd client && npm run typecheck
+	@cd client && npm run check
 
 client-build:
 	@cd client && npm run build
 
 client-fmt:
-	@cd client && npm run fmt
+	@cd client && npm run format
 
 client-smoke:
-	@./client/scripts/smoke.sh
+	@cd client && npm run test:e2e -- --project=chromium --grep="smoke|Day 2"

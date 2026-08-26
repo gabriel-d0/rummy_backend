@@ -1,8 +1,9 @@
 import Phaser from "phaser";
 import { discardSelected, meldSelected, renderRack, sortRack } from "../ui/Rack";
 import { getLayout } from "../ui/Layout";
-import { subscribePrivateSnapshot } from "../state/sync";
+import { subscribePrivateSnapshot, canPlayerAct } from "../state/sync";
 import type { PrivateSnapshot } from "../state/snapshot";
+import { OpClientDiscard, OpClientMeldInitial, OpClientMeldNew } from "../net/protocol";
 
 // Day 11 + Day 19: RackScene renders PrivateView.OwnRack only (redaction) with subspace layout
 // Day 30: subscribes to PrivateSnapshot and re-renders OwnRack only (never foreign rack)
@@ -22,6 +23,34 @@ export class RackScene extends Phaser.Scene {
       y: layout.rack.y + layout.rack.h / 2,
       spacing: 62,
     });
+  }
+
+  private setButtonEnabled(btn: Phaser.GameObjects.Text, enabled: boolean): void {
+    btn.setAlpha(enabled ? 1 : 0.35);
+    if (enabled) {
+      btn.setInteractive({ useHandCursor: true });
+    } else {
+      btn.disableInteractive();
+    }
+  }
+
+  private updateButtonStates(
+    snap: PrivateSnapshot,
+    discardBtn: Phaser.GameObjects.Text,
+    meldRunBtn: Phaser.GameObjects.Text,
+    meldSetBtn: Phaser.GameObjects.Text
+  ): void {
+    const canDiscard = canPlayerAct(snap, OpClientDiscard);
+    const canMeldInitial = canPlayerAct(snap, OpClientMeldInitial);
+    const canMeldNew = canPlayerAct(snap, OpClientMeldNew);
+    const canMeld = canMeldInitial || canMeldNew;
+    this.setButtonEnabled(discardBtn, canDiscard);
+    this.setButtonEnabled(meldRunBtn, canMeld);
+    this.setButtonEnabled(meldSetBtn, canMeld);
+    // Also log for e2e
+    console.log(
+      `Day 36 button states: discard=${canDiscard} meld=${canMeld} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
+    );
   }
 
   create() {
@@ -51,13 +80,6 @@ export class RackScene extends Phaser.Scene {
     const rackCenterX = layout.rack.x + layout.rack.w / 2;
     const startX = rackCenterX - totalW / 2;
     renderRack(this, mockRack, 0, { x: startX, y: layout.rack.y + layout.rack.h / 2, spacing: 62 });
-
-    // Day 30: subscribe to PrivateSnapshot — re-render OwnRack only (redaction)
-    const unsubscribe = subscribePrivateSnapshot((snap) => {
-      this.renderPrivateRack(snap);
-    });
-    this.events.once("shutdown", unsubscribe);
-    this.events.once("destroy", unsubscribe);
 
     // Day 17: dragstart
     this.input.on("dragstart", (_pointer: any, gameObject: any) => {
@@ -113,6 +135,15 @@ export class RackScene extends Phaser.Scene {
       const res = meldSelected("set");
       if (res) console.log(`meldSelected success: set ${res.tileIds.join(",")}`);
     });
+
+    // Day 30: subscribe to PrivateSnapshot — re-render OwnRack only (redaction)
+    // Day 36: also update button states per CurrentSeat/TurnPhase/HasOpened
+    const unsubscribe = subscribePrivateSnapshot((snap) => {
+      this.renderPrivateRack(snap);
+      this.updateButtonStates(snap, discardBtn, meldRunBtn, meldSetBtn);
+    });
+    this.events.once("shutdown", unsubscribe);
+    this.events.once("destroy", unsubscribe);
 
     this.add
       .text(

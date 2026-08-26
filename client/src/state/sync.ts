@@ -5,6 +5,17 @@ import {
   isValidPrivateSnapshot,
   checkNoLeak as checkNoLeakSnapshot,
 } from "./snapshot";
+import {
+  OpClientStart,
+  OpClientDiscard,
+  OpClientDrawStock,
+  OpClientDrawPreviousDiscard,
+  OpClientPickupDiscardForMeld,
+  OpClientMeldInitial,
+  OpClientMeldNew,
+  OpClientExtendMeld,
+  OpClientReplaceJoker,
+} from "../net/protocol";
 import { showErrorToast, type ServerError } from "../ui/ErrorToast";
 
 // Day 27: Receive match state — parses Envelope and routes op 100/101/102/103 to handlers
@@ -163,6 +174,63 @@ export function checkNoLeak(publicJson: string, privateIds: string[]): boolean {
     console.log("LEAKED: publicJson contains privateId");
   }
   return ok;
+}
+
+// Day 36: State machine client — mirrors Go phases.go:15 AllowedOps
+export function allowedOps(gamePhase: string, turnPhase: string): Set<number> {
+  const ops = new Set<number>();
+  switch (gamePhase) {
+    case "Waiting":
+      ops.add(OpClientStart);
+      break;
+    case "OpeningDiscard":
+      ops.add(OpClientDiscard);
+      break;
+    case "Playing":
+      if (turnPhase === "MustDraw") {
+        ops.add(OpClientDrawStock);
+        ops.add(OpClientDrawPreviousDiscard);
+        ops.add(OpClientPickupDiscardForMeld);
+      } else if (turnPhase === "MeldOrDiscard") {
+        ops.add(OpClientDiscard);
+        ops.add(OpClientMeldInitial);
+        ops.add(OpClientMeldNew);
+        ops.add(OpClientExtendMeld);
+        ops.add(OpClientReplaceJoker);
+      }
+      break;
+    case "RoundComplete":
+      break;
+  }
+  return ops;
+}
+
+export function isOpAllowedForSnapshot(
+  snap: PublicSnapshot | PrivateSnapshot,
+  op: number
+): boolean {
+  return allowedOps(snap.gamePhase, snap.turnPhase).has(op);
+}
+
+export function canPlayerAct(snap: PrivateSnapshot, op: number): boolean {
+  if (!isOpAllowedForSnapshot(snap, op)) return false;
+  if (snap.gamePhase === "Waiting") {
+    return snap.ownSeat === 0;
+  }
+  if (snap.currentSeat !== snap.ownSeat) return false;
+  const me = snap.players.find((p) => p.seat === snap.ownSeat);
+  const hasOpened = me?.hasOpened ?? false;
+  if (
+    op === OpClientDrawPreviousDiscard ||
+    op === OpClientPickupDiscardForMeld ||
+    op === OpClientExtendMeld ||
+    op === OpClientReplaceJoker ||
+    op === OpClientMeldNew
+  ) {
+    if (!hasOpened) return false;
+  }
+  if (op === OpClientMeldInitial && hasOpened) return false;
+  return true;
 }
 
 export function onServerError(error: ServerError): void {

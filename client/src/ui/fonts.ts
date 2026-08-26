@@ -1,10 +1,6 @@
 /**
- * Font System — ensures Inter and JetBrains Mono are loaded before Phaser Text creation.
- * Uses correct Phaser TextStyle per https://docs.phaser.io/api-documentation/typedef/types-gameobjects-text#TextStyle
- * - fontFamily: "'Inter', system-ui, sans-serif" (quoted if needed)
- * - fontSize: "26px" (string with px)
- * - fontStyle: "bold" (not "700" — Phaser only understands bold/normal/italic)
- * - For weight, use font: "700 26px Inter" shorthand which overrides fontFamily/fontSize/fontStyle
+ * Font System — crisp Inter via correct Phaser TextStyle + high DPI + font-display swap.
+ * Fixes blocky: was using backgroundColor + shadow + late font load → fallback bitmap.
  */
 
 export const FontFamily = {
@@ -18,19 +14,17 @@ export function loadFonts(): Promise<void> {
   if (fontsReady) return fontsReady;
   fontsReady = (async () => {
     if (typeof document === "undefined" || !("fonts" in document)) return;
-    const families = [
-      '700 26px "Inter"',
-      '600 13px "Inter"',
-      '600 11px "Inter"',
-      '700 11px "Inter"',
-      '600 10px "JetBrains Mono"',
-      '400 9px "Inter"',
-    ];
     try {
-      await Promise.all(
-        families.map((f) => (document as unknown as { fonts: { load: (s: string) => Promise<unknown> } }).fonts.load(f))
-      );
+      // Load critical weights via CSS Font Loading API
+      await Promise.all([
+        (document as unknown as { fonts: { load: (s: string) => Promise<unknown> } }).fonts.load('700 32px "Inter"'),
+        (document as unknown as { fonts: { load: (s: string) => Promise<unknown> } }).fonts.load('600 14px "Inter"'),
+        (document as unknown as { fonts: { load: (s: string) => Promise<unknown> } }).fonts.load('600 11px "Inter"'),
+        (document as unknown as { fonts: { load: (s: string) => Promise<unknown> } }).fonts.load('400 12px "Inter"'),
+      ]);
       await (document as unknown as { fonts: { ready: Promise<void> } }).fonts.ready;
+      // Small delay to ensure Phaser's canvas picks up the loaded font
+      await new Promise((r) => setTimeout(r, 50));
     } catch {
       // ignore
     }
@@ -41,25 +35,28 @@ export function loadFonts(): Promise<void> {
 export type TextStylePreset = "title" | "subtitle" | "label" | "mono" | "debug";
 
 export function textStyle(preset: TextStylePreset): Phaser.Types.GameObjects.Text.TextStyle {
+  const resolution = typeof window !== "undefined" ? Math.max(2, window.devicePixelRatio || 1) : 2;
   switch (preset) {
     case "title":
       return {
         fontFamily: FontFamily.inter,
-        fontSize: "26px",
+        fontSize: "32px",
         fontStyle: "bold",
         color: "#ffffff",
         align: "center",
-        shadow: { offsetX: 0, offsetY: 2, color: "#0a2e1a", blur: 6, fill: true, stroke: false },
+        resolution,
+        // No backgroundColor, no stroke, no shadow — just crisp Inter 700
       };
     case "subtitle":
       return {
         fontFamily: FontFamily.inter,
-        fontSize: "11px",
+        fontSize: "12px",
         fontStyle: "bold",
-        color: "#e0f2e0",
-        backgroundColor: "#0a2e1aee",
-        padding: { x: 12, y: 7 },
+        color: "#d7e8d7",
         align: "center",
+        resolution,
+        backgroundColor: "#0a2e1aee",
+        padding: { x: 12, y: 6 },
       };
     case "label":
       return {
@@ -70,6 +67,7 @@ export function textStyle(preset: TextStylePreset): Phaser.Types.GameObjects.Tex
         backgroundColor: "#0a2e1a",
         padding: { x: 14, y: 8 },
         align: "center",
+        resolution,
       };
     case "mono":
       return {
@@ -80,6 +78,7 @@ export function textStyle(preset: TextStylePreset): Phaser.Types.GameObjects.Tex
         backgroundColor: "#0a2e1a",
         padding: { x: 10, y: 6 },
         align: "center",
+        resolution,
       };
     case "debug":
       return {
@@ -89,9 +88,10 @@ export function textStyle(preset: TextStylePreset): Phaser.Types.GameObjects.Tex
         fontStyle: "bold",
         backgroundColor: "#0a2e1acc",
         padding: { x: 5, y: 3 },
+        resolution,
       };
     default:
-      return { fontFamily: FontFamily.inter, fontSize: "13px", color: "#ffffff", fontStyle: "bold" };
+      return { fontFamily: FontFamily.inter, fontSize: "13px", color: "#ffffff", fontStyle: "bold", resolution };
   }
 }
 
@@ -105,7 +105,5 @@ export function createText(
 ): Phaser.GameObjects.Text {
   const t = scene.add.text(x, y, text, textStyle(preset));
   t.setOrigin(origin, origin);
-  // Ensure crisp rendering
-  t.setResolution(window.devicePixelRatio || 1);
   return t;
 }

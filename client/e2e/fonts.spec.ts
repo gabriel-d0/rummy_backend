@@ -17,7 +17,7 @@ test("Font system — Inter and JetBrains Mono loaded and text is readable", asy
   const textOk = await page.evaluate(async () => {
     const mod = await import("/src/ui/fonts.ts");
     const style = mod.textStyle("title");
-    return style.fontFamily === "Inter" && style.fontSize === "26px" && style.fontStyle === "bold" && !!style.shadow;
+    return style.fontFamily === "Inter" && style.fontSize === "32px" && style.fontStyle === "bold" && (style.resolution ?? 1) >= 2;
   });
   expect(textOk).toBeTruthy();
   const hasTitle = await page.evaluate(() => {
@@ -37,8 +37,7 @@ test("Font system — no blocky text, Inter is readable via correct TextStyle", 
     const mod = await import("/src/ui/fonts.ts");
     const title = mod.textStyle("title");
     const debug = mod.textStyle("debug");
-    // Check that fontStyle is bold not 600/700 numeric, and that family is Inter without fallback garbage
-    return title.fontFamily === "Inter" && title.fontStyle === "bold" && debug.fontFamily === "Inter" && debug.fontSize === "10px";
+    return title.fontFamily === "Inter" && title.fontStyle === "bold" && title.fontSize === "32px" && debug.fontFamily === "Inter" && debug.fontSize === "10px" && (title.resolution ?? 1) >= 2;
   });
   expect(styleOk).toBeTruthy();
 });

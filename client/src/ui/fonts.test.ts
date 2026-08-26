@@ -7,19 +7,18 @@ describe("Font System", () => {
     expect(FontFamily.mono).toBe("JetBrains Mono");
   });
 
-  it("textStyle returns correct presets with Inter bold", () => {
+  it("textStyle returns correct presets with Inter bold and high DPI", () => {
     const title = textStyle("title");
     expect(title.fontFamily).toBe("Inter");
-    expect(title.fontSize).toBe("26px");
+    expect(title.fontSize).toBe("32px");
     expect(title.fontStyle).toBe("bold");
     expect(title.color).toBe("#ffffff");
-    expect(title.shadow).toBeTruthy();
+    expect(title.resolution).toBeGreaterThanOrEqual(2);
 
     const subtitle = textStyle("subtitle");
     expect(subtitle.fontFamily).toBe("Inter");
-    expect(subtitle.fontSize).toBe("11px");
+    expect(subtitle.fontSize).toBe("12px");
     expect(subtitle.fontStyle).toBe("bold");
-    expect(subtitle.backgroundColor).toBe("#0a2e1aee");
 
     const label = textStyle("label");
     expect(label.fontFamily).toBe("Inter");

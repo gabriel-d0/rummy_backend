@@ -8,8 +8,8 @@ export class Preload extends Phaser.Scene {
   }
 
   async preload() {
-    console.log("Preload: Day 4 LayoutManager — GameSpace 1000x1000 + 6 subspaces");
     await loadFonts();
+    console.log("Preload: Day 4 LayoutManager — GameSpace 1000x1000 + 6 subspaces");
   }
 
   async create() {

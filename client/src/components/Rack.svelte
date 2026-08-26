@@ -2,7 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
 	import { privateStore } from '$lib/game/store';
-	import { sendDiscard, sendDrawStock } from '$lib/game/actions';
+	import { sendDiscard, sendDrawStock, sendDrawPreviousDiscard } from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
 
@@ -62,8 +62,28 @@
 		return isPlaying && isMustDraw && isMyTurn;
 	});
 
+	// Day 32 — Draw previous: HasOpened + discardRow not empty + !IsOpeningDiscard
+	const hasOpened = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return false;
+		const me = priv.players.find((p) => p.seat === priv.ownSeat);
+		return me ? me.hasOpened : false;
+	});
+	const canDrawPrevious = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return false;
+		if (!isPlaying || !isMustDraw || !isMyTurn) return false;
+		if (!hasOpened) return false;
+		if (!priv.discardRow || priv.discardRow.length === 0) return false;
+		const last = priv.discardRow[priv.discardRow.length - 1];
+		if (!last) return false;
+		if (last.IsOpeningDiscard) return false;
+		return true;
+	});
+
 	let discarding = $state(false);
 	let drawing = $state(false);
+	let drawingPrev = $state(false);
 
 	async function discardSelected() {
 		if (!canDiscard || selected.size !== 1) return;
@@ -89,6 +109,18 @@
 			void _err;
 		} finally {
 			drawing = false;
+		}
+	}
+
+	async function drawPrevious() {
+		if (!canDrawPrevious || drawingPrev) return;
+		drawingPrev = true;
+		try {
+			await sendDrawPreviousDiscard();
+		} catch (_err) {
+			void _err;
+		} finally {
+			drawingPrev = false;
 		}
 	}
 </script>
@@ -152,6 +184,15 @@
 				{canDraw
 				? 'bg-emerald-500 text-black hover:bg-emerald-400'
 				: 'cursor-not-allowed bg-white/10 text-white/40'}">▶ TRAGE DIN TALON</button
+		>
+		<button
+			onclick={drawPrevious}
+			disabled={!canDrawPrevious || drawingPrev}
+			data-testid="draw-prev-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canDrawPrevious
+				? 'bg-sky-500 text-white hover:bg-sky-400'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">↩ IA ULTIMA</button
 		>
 		<button
 			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"

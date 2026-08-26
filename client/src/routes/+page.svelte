@@ -33,6 +33,9 @@
 	const matchId = $derived($matchStore ?? getStoredMatchId() ?? null);
 	const priv = $derived($privateStore);
 	const pub = $derived($publicStore);
+	const gamePhase = $derived(priv?.gamePhase ?? pub?.gamePhase ?? '');
+	const currentSeat = $derived(priv?.currentSeat ?? pub?.currentSeat ?? -1);
+	const mySeat = $derived(priv?.ownSeat ?? -1);
 
 	async function refreshMatches() {
 		if (!$authStore) return;
@@ -68,12 +71,10 @@
 					void _err;
 				}
 			}
-			// initial poll
+			// initial poll — no auto interval to avoid hard reload, user clicks reîmprospătează
+			// Svelte flip/fade will animate just that list when refreshed
 			refreshMatches();
 		})();
-		// auto poll Camere disponibile in background with Svelte flip/fade — no hard reload
-		const interval = setInterval(refreshMatches, 2500);
-		return () => clearInterval(interval);
 	});
 
 	async function handleCreate() {

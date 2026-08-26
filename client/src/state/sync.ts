@@ -9,6 +9,9 @@ import { showErrorToast, type ServerError } from "../ui/ErrorToast";
 let lastPrivateSnapshot: PrivateSnapshot | null = null;
 let lastPublicSnapshot: PublicSnapshot | null = null;
 
+// Day 33: per-Seat storage for reconnection (ownSeat -> PrivateSnapshot)
+const lastPrivateBySeat = new Map<number, PrivateSnapshot>();
+
 const privateListeners: ((snap: PrivateSnapshot) => void)[] = [];
 const publicListeners: ((snap: PublicSnapshot) => void)[] = [];
 
@@ -51,13 +54,42 @@ export function clearPublicListeners(): void {
   publicListeners.length = 0;
 }
 
+// Day 33: per-Seat accessors for reconnection
+export function getLastPrivateBySeat(seat: number): PrivateSnapshot | null {
+  return lastPrivateBySeat.get(seat) ?? null;
+}
+
+export function getAllPrivateBySeat(): ReadonlyMap<number, PrivateSnapshot> {
+  return new Map(lastPrivateBySeat);
+}
+
+export function clearAllPrivate(): void {
+  lastPrivateBySeat.clear();
+  lastPrivateSnapshot = null;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("rummy_lastPrivate")) keys.push(k);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch {
+    // ignore in node test env
+  }
+}
+
 export function onPrivateSnapshot(snap: PrivateSnapshot): void {
   lastPrivateSnapshot = snap;
+  lastPrivateBySeat.set(snap.ownSeat, snap);
   console.log(
-    `received op 100 PrivateSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} ownSeat=${snap.ownSeat} rack=${snap.ownRack.length} — Day 30`
+    `received op 100 PrivateSnapshot v=${snap.v} gamePhase=${snap.gamePhase} currentSeat=${snap.currentSeat} ownSeat=${snap.ownSeat} rack=${snap.ownRack.length} — Day 33`
   );
   try {
     localStorage.setItem("rummy_lastPrivate", JSON.stringify(snap));
+    localStorage.setItem(`rummy_lastPrivate:${snap.ownSeat}`, JSON.stringify(snap));
+    const mapObj: Record<string, PrivateSnapshot> = {};
+    for (const [seat, s] of lastPrivateBySeat) mapObj[String(seat)] = s;
+    localStorage.setItem("rummy_lastPrivate:map", JSON.stringify(mapObj));
   } catch {
     // ignore in node test env where localStorage is mocked or missing
   }

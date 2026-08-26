@@ -74,6 +74,30 @@ export async function createSocket(): Promise<any> {
         handleMatchData(opCode, data);
       });
     };
+    // Day 33: keep matchId and userId on disconnect for reconnection
+    const keepForReconnect = () => {
+      try {
+        const matchId = localStorage.getItem("rummy_matchId");
+        const userId = localStorage.getItem("rummy_userId");
+        const token = localStorage.getItem("rummy_token");
+        console.log(
+          `Socket disconnected — keeping matchId=${matchId} userId=${userId} for reconnection — Day 33`
+        );
+        // Ensure they remain stored (they already are, but re-set to be safe)
+        if (matchId) localStorage.setItem("rummy_matchId", matchId);
+        if (userId) localStorage.setItem("rummy_userId", userId);
+        if (token) localStorage.setItem("rummy_token", token);
+      } catch {
+        // ignore in test env
+      }
+    };
+    socket.ondisconnect = keepForReconnect;
+    // nakama-js may also emit onDisconnect (camelCase) or via socket.on('disconnect')
+    try {
+      socket.onDisconnect = keepForReconnect;
+    } catch {
+      // ignore
+    }
     await socket.connect(s, true);
     console.log("Socket connected — Day 3 (Day 22) with onmatchdata handler Day 27");
   }

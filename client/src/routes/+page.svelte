@@ -80,16 +80,7 @@
 			// initial poll
 			refreshMatches();
 		})();
-		// poll available matches in lobby
-		const interval = setInterval(refreshMatches, 2000);
-		return () => clearInterval(interval);
-	});
-
-	// also refresh when auth changes to lobby
-	$effect(() => {
-		if (isAuthed && !priv && !pub) {
-			refreshMatches();
-		}
+		// no auto interval — user clicks reîmprospătează, avoids reload loop
 	});
 
 	async function handleCreate() {
@@ -140,9 +131,8 @@
 		try {
 			localStorage.removeItem('rummy_matchId');
 			resetGame();
-			// keep auth, but clear matchStore
-			// matchStore will be cleared via localStorage removal and reload
-			location.reload();
+			// clear matchStore without full reload
+			import('$lib/nakama/match').then(({ clearMatchId }) => clearMatchId());
 		} catch (_err) {
 			void _err;
 		}

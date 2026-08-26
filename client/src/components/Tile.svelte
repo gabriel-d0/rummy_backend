@@ -1,10 +1,18 @@
 <script lang="ts">
-  let { colour = 1, rank = 1, isJoker = false, size = "rack", selected = false } = $props<{
+  let {
+    colour = 1,
+    rank = 1,
+    isJoker = false,
+    size = "rack",
+    selected = false,
+    draggable = false
+  } = $props<{
     colour?: number;
     rank?: number;
     isJoker?: boolean;
     size?: "rack" | "table";
     selected?: boolean;
+    draggable?: boolean;
   }>();
 
   const colourMap: Record<number, string> = {
@@ -28,34 +36,35 @@
   {@const base = colourMap[colour] ?? colourMap[4]}
   <div
     class="relative flex flex-col items-center justify-between rounded-lg border bg-white select-none transition-all
-      {size === 'table' ? 'w-[52px] h-[72px] sm:w-[56px] sm:h-[78px]' : 'w-[64px] h-[90px] sm:w-[72px] sm:h-[100px]'}
+      w-[48px] h-[64px]
       {isJoker ? 'border-amber-500 bg-amber-50' : base}
-      {selected ? 'ring-2 ring-sky-500 ring-offset-1 scale-[1.03] shadow-lg' : 'shadow-sm hover:shadow-md hover:-translate-y-0.5'}
-      cursor-pointer"
+      {selected ? 'ring-2 ring-sky-500 ring-offset-1 scale-[1.06] shadow-lg' : 'shadow-sm hover:shadow-md hover:-translate-y-0.5'}
+      {draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}"
+    draggable={draggable}
   >
-    <div class="flex w-full justify-between px-1.5 pt-1 text-[10px] font-bold leading-none {isJoker ? 'text-amber-600' : base.split(' ')[0]}">
+    <div class="flex w-full justify-between px-1 pt-1 text-[9px] font-bold leading-none {isJoker ? 'text-amber-600' : base.split(' ')[0]}">
       <span>{isJoker ? "J" : label}</span>
-      <span class="text-[7px] opacity-60">{isJoker ? "J" : colour === 1 ? "♥" : colour === 2 ? "♦" : colour === 3 ? "♣" : "♠"}</span>
+      <span class="text-[6px] opacity-60">{isJoker ? "J" : colour === 1 ? "♥" : colour === 2 ? "♦" : colour === 3 ? "♣" : "♠"}</span>
     </div>
-    <div class="flex flex-1 flex-col items-center justify-center py-1">
+    <div class="flex flex-1 flex-col items-center justify-center py-0.5">
       {#if isJoker}
         <div class="text-center">
-          <div class="text-[18px] font-black leading-none text-amber-600">J</div>
-          <div class="text-[7px] font-bold tracking-widest text-amber-700">JOKER</div>
+          <div class="text-[16px] font-black leading-none text-amber-600">J</div>
+          <div class="text-[6px] font-bold tracking-widest text-amber-700">JOKER</div>
         </div>
       {:else}
         <div class="text-center">
-          <div class="text-[22px] font-black leading-none {base.split(' ')[0]}">{label}</div>
-          <div class="mt-0.5 text-xs {base.split(' ')[0]}">●</div>
+          <div class="text-[18px] font-black leading-none {base.split(' ')[0]}">{label}</div>
+          <div class="text-[8px] {base.split(' ')[0]}">●</div>
         </div>
       {/if}
     </div>
-    <div class="flex w-full justify-between px-1.5 pb-1 text-[10px] font-bold leading-none rotate-180 {isJoker ? 'text-amber-600' : base.split(' ')[0]}">
+    <div class="flex w-full justify-between px-1 pb-1 text-[9px] font-bold leading-none rotate-180 {isJoker ? 'text-amber-600' : base.split(' ')[0]}">
       <span>{isJoker ? "J" : label}</span>
-      <span class="text-[7px] opacity-60">{isJoker ? "J" : colour === 1 ? "♥" : colour === 2 ? "♦" : colour === 3 ? "♣" : "♠"}</span>
+      <span class="text-[6px] opacity-60">{isJoker ? "J" : colour === 1 ? "♥" : colour === 2 ? "♦" : colour === 3 ? "♣" : "♠"}</span>
     </div>
     {#if selected}
-      <div class="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-sky-500 text-[10px] font-bold text-white shadow">✓</div>
+      <div class="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-sky-500 text-[8px] font-bold text-white shadow">✓</div>
     {/if}
   </div>
 {/snippet}

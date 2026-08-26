@@ -7,8 +7,8 @@ export function renderStockCount(
   count: number,
   opts?: { x?: number; y?: number },
 ): Phaser.GameObjects.Text {
-  const x = opts?.x ?? 800;
-  const y = opts?.y ?? 50;
+  const x = opts?.x ?? 880;
+  const y = opts?.y ?? 40;
   // Clear previous
   const existing = scene.children.list.filter((c) => (c as any).getData?.("isStockCount"));
   for (const c of existing) c.destroy();
@@ -17,14 +17,14 @@ export function renderStockCount(
     fontFamily: "monospace",
     fontSize: "14px",
     color: "#ffffff",
-    backgroundColor: "#00000066",
+    backgroundColor: "#000000aa",
     padding: { x: 8, y: 4 },
   });
   text.setOrigin(0.5);
   text.setData("isStockCount", true);
-  // Add a small stock pile visualization (stacked rectangles)
+  // Add a small stock pile visualization (stacked rectangles) below text, not overlapping turn indicator
   for (let i = 0; i < Math.min(3, Math.ceil(count / 20)); i++) {
-    const pile = scene.add.rectangle(x, y + 20 + i * 3, 40, 30, 0x4444aa).setStrokeStyle(1, 0x222266);
+    const pile = scene.add.rectangle(x, y + 28 + i * 4, 44, 22, 0x4444aa).setStrokeStyle(1, 0x222266);
     pile.setData("isStockCount", true);
   }
   return text;
@@ -37,8 +37,8 @@ export function renderTurnIndicator(
   turnPhase: string,
   opts?: { x?: number; y?: number },
 ): Phaser.GameObjects.Text {
-  const x = opts?.x ?? 800;
-  const y = opts?.y ?? 80;
+  const x = opts?.x ?? 880;
+  const y = opts?.y ?? 105;
   const existing = scene.children.list.filter((c) => (c as any).getData?.("isTurnIndicator"));
   for (const c of existing) c.destroy();
 

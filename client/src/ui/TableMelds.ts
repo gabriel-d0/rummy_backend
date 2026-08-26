@@ -7,10 +7,10 @@ export function renderTableMelds(
   melds: TableMeld[],
   opts?: { x?: number; y0?: number; rowHeight?: number; tileSpacing?: number },
 ): Phaser.GameObjects.Container[] {
-  const x0 = opts?.x ?? 100;
-  const y0 = opts?.y0 ?? 100;
-  const rowHeight = opts?.rowHeight ?? 80;
-  const tileSpacing = opts?.tileSpacing ?? 40;
+  const x0 = opts?.x ?? 80;
+  const y0 = opts?.y0 ?? 110;
+  const rowHeight = opts?.rowHeight ?? 70;
+  const tileSpacing = opts?.tileSpacing ?? 50;
 
   // Clear previous melds (tagged with "table-meld")
   const existing = scene.children.list.filter((c) => (c as any).getData?.("isTableMeld"));

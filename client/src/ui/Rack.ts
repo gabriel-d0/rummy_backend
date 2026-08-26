@@ -45,7 +45,7 @@ export function renderRack(
   seat: number,
   opts?: { x?: number; y?: number; spacing?: number },
 ): Phaser.GameObjects.Image[] {
-  const spacing = opts?.spacing ?? 54;
+  const spacing = opts?.spacing ?? 62;
   const y = opts?.y ?? 700;
   // Center the rack within the wood rack image (800x120 at 512,680)
   // Rack left edge is at 512-400=112, but we center tiles at 512

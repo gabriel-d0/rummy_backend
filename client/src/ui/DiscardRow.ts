@@ -7,9 +7,9 @@ export function renderDiscardRow(
   discardRow: DiscardEntry[],
   opts?: { x?: number; y?: number; spacing?: number },
 ): Phaser.GameObjects.Container[] {
-  const x0 = opts?.x ?? 100;
-  const y = opts?.y ?? 300;
-  const spacing = opts?.spacing ?? 40;
+  const x0 = opts?.x ?? 80;
+  const y = opts?.y ?? 280;
+  const spacing = opts?.spacing ?? 50;
 
   // Clear previous discard row (tagged with "discard-row")
   const existing = scene.children.list.filter((c) => (c as any).getData?.("isDiscardRow"));

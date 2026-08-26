@@ -6,12 +6,13 @@ import {
 	OpClientDiscard,
 	OpClientDrawStock,
 	OpClientDrawPreviousDiscard,
-	OpClientPickupDiscardForMeld
+	OpClientPickupDiscardForMeld,
+	OpClientMeldInitial
 } from '../nakama/protocol';
 import { getSocket, createSocket } from '../nakama/socket';
 import { getMatchId, getStoredMatchId } from '../nakama/match';
 
-// Day 29-32 — Game actions — Start via OpClientStart 1 + Opening discard via OpClientDiscard 2 + Draw stock via OpClientDrawStock 3 + Draw previous via OpClientDrawPreviousDiscard 4
+// Day 29-35 — Game actions — Start 1 + Opening discard 2 + Draw stock 3 + Draw previous 4 + Pickup 5 + MeldInitial 6
 
 export const lastSent = writable<{ op: number; envelope: string; matchId: string } | null>(null);
 export const lastSentStore = lastSent;
@@ -175,6 +176,52 @@ export async function sendPickupDiscardForMeld(
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		await (sock as any).sendMatchState(matchId, OpClientPickupDiscardForMeld, envelope);
+	} catch (_err) {
+		void _err;
+	}
+	return envelope;
+}
+
+export async function sendMeldInitial(
+	melds: Array<{
+		id?: string;
+		kind: 'run' | 'set';
+		tileIds: string[];
+		jokerReps?: Record<string, unknown>;
+	}>,
+	requestId?: string
+): Promise<string> {
+	if (!melds || melds.length === 0) throw new Error('melds required');
+	const matchId = getMatchId() ?? getStoredMatchId() ?? 'mock-match';
+	let sock = getSocket();
+	if (!sock) {
+		try {
+			sock = await createSocket();
+		} catch (_err) {
+			void _err;
+			sock = { sendMatchState: async () => ({}) } as unknown as typeof sock;
+		}
+	}
+	const rid =
+		requestId ??
+		(typeof crypto !== 'undefined' && 'randomUUID' in crypto
+			? crypto.randomUUID()
+			: `req-${Date.now()}`);
+	// Map to server expected shape: melds:[{id,kind,tileIds,jokerReps}]
+	const payload = {
+		melds: melds.map((m, i) => ({
+			id: m.id ?? `m${i + 1}`,
+			kind: m.kind,
+			tileIds: m.tileIds,
+			jokerReps: m.jokerReps ?? {}
+		}))
+	};
+	const envelope = NewEnvelope(OpClientMeldInitial, payload, rid);
+	_lastSentRaw = { op: OpClientMeldInitial, envelope, matchId };
+	lastSent.set(_lastSentRaw);
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		await (sock as any).sendMatchState(matchId, OpClientMeldInitial, envelope);
 	} catch (_err) {
 		void _err;
 	}

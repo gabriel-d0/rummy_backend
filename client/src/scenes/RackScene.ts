@@ -3,7 +3,12 @@ import { discardSelected, meldSelected, renderRack, sortRack, clearSelected } fr
 import { getLayout } from "../ui/Layout";
 import { subscribePrivateSnapshot, canPlayerAct } from "../state/sync";
 import type { PrivateSnapshot } from "../state/snapshot";
-import { OpClientDiscard, OpClientMeldInitial, OpClientMeldNew } from "../net/protocol";
+import {
+  OpClientDiscard,
+  OpClientDrawStock,
+  OpClientMeldInitial,
+  OpClientMeldNew,
+} from "../net/protocol";
 import { sendMatchState } from "../net/protocol";
 import { createSocket, getStoredMatchId } from "../net/nakama";
 
@@ -40,18 +45,21 @@ export class RackScene extends Phaser.Scene {
     snap: PrivateSnapshot,
     discardBtn: Phaser.GameObjects.Text,
     meldRunBtn: Phaser.GameObjects.Text,
-    meldSetBtn: Phaser.GameObjects.Text
+    meldSetBtn: Phaser.GameObjects.Text,
+    drawBtn?: Phaser.GameObjects.Text
   ): void {
     const canDiscard = canPlayerAct(snap, OpClientDiscard);
     const canMeldInitial = canPlayerAct(snap, OpClientMeldInitial);
     const canMeldNew = canPlayerAct(snap, OpClientMeldNew);
     const canMeld = canMeldInitial || canMeldNew;
+    const canDraw = snap ? canPlayerAct(snap, OpClientDrawStock) : false;
     this.setButtonEnabled(discardBtn, canDiscard);
     this.setButtonEnabled(meldRunBtn, canMeld);
     this.setButtonEnabled(meldSetBtn, canMeld);
+    if (drawBtn) this.setButtonEnabled(drawBtn, canDraw);
     // Also log for e2e
     console.log(
-      `Day 36 button states: discard=${canDiscard} meld=${canMeld} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
+      `Day 36 button states: discard=${canDiscard} meld=${canMeld} draw=${canDraw} phase=${snap.gamePhase}/${snap.turnPhase} seat=${snap.ownSeat} current=${snap.currentSeat} opened=${snap.players.find((p) => p.seat === snap.ownSeat)?.hasOpened}`
     );
   }
 
@@ -147,6 +155,38 @@ export class RackScene extends Phaser.Scene {
         `discardSelected success: ${res.tileId} (not OpeningDiscard — Day 38 only logs, Day 42 will send)`
       );
     });
+    // Day 39: Draw button — visible only if Playing MustDraw and ownSeat==currentSeat, sends OpClientDrawStock 3 {}
+    const drawBtn = this.add
+      .text(btnX - 310, btnY, "[Draw]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#1a3d2e",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .setAlpha(0.5)
+      .disableInteractive();
+    drawBtn.setData("isDrawBtn", true);
+    drawBtn.on("pointerdown", async () => {
+      if (drawBtn.alpha < 1) return;
+      try {
+        const sock = await createSocket();
+        const matchId = getStoredMatchId();
+        if (!matchId) {
+          console.log("draw failed: no matchId");
+          return;
+        }
+        drawBtn.disableInteractive();
+        drawBtn.setAlpha(0.5);
+        await sendMatchState(sock, matchId, OpClientDrawStock, {}, `req-draw-${Date.now()}`);
+        console.log("sent OpClientDrawStock — Day 39");
+      } catch (e) {
+        console.log("draw failed", e);
+      }
+    });
+
     // Day 20: Meld buttons — validate selected.size>=3 and log MELD_INITIAL or MELD_NEW
     const meldRunBtn = this.add
       .text(btnX - 110, btnY, "[Meld Run]", {
@@ -180,10 +220,11 @@ export class RackScene extends Phaser.Scene {
     // Day 30: subscribe to PrivateSnapshot — re-render OwnRack only (redaction)
     // Day 36: also update button states per CurrentSeat/TurnPhase/HasOpened
     // Day 38: track latestPrivate for opening discard handler
+    // Day 39: also update Draw button per MustDraw
     const unsubscribe = subscribePrivateSnapshot((snap) => {
       latestPrivate = snap;
       this.renderPrivateRack(snap);
-      this.updateButtonStates(snap, discardBtn, meldRunBtn, meldSetBtn);
+      this.updateButtonStates(snap, discardBtn, meldRunBtn, meldSetBtn, drawBtn);
     });
     this.events.once("shutdown", unsubscribe);
     this.events.once("destroy", unsubscribe);

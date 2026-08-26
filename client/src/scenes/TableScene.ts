@@ -3,8 +3,15 @@ import { renderDiscardRow } from "../ui/DiscardRow";
 import { getLayout } from "../ui/Layout";
 import { renderStockCount, renderTurnIndicator } from "../ui/StockCount";
 import { renderTableMelds } from "../ui/TableMelds";
-import { subscribePublicSnapshot } from "../state/sync";
-import type { PublicSnapshot } from "../state/snapshot";
+import {
+  subscribePublicSnapshot,
+  subscribePrivateSnapshot,
+  shouldShowStartButton,
+} from "../state/sync";
+import type { PublicSnapshot, PrivateSnapshot } from "../state/snapshot";
+import { OpClientStart } from "../net/protocol";
+import { sendMatchState } from "../net/protocol";
+import { createSocket, getStoredMatchId } from "../net/nakama";
 
 // Day 15+ TableScene — now uses subspace Layout for mathematically defined bounds and responsive design
 // Day 31: subscribes to PublicSnapshot and re-renders TableMelds/DiscardRow/StockCount/CurrentSeat (not OwnRack)
@@ -78,6 +85,56 @@ export class TableScene extends Phaser.Scene {
       x: layout.topBar.x + layout.topBar.w - 60,
       y: layout.topBar.y + 45,
     });
+
+    // Day 37: Start button — visible only if Waiting + host Seat 0 + >=2 players
+    const startBtn = this.add
+      .text(layout.topBar.x + 12, layout.topBar.y + 18, "[Start]", {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#ffffff",
+        backgroundColor: "#1a5c2e",
+        padding: { x: 10, y: 6 },
+      })
+      .setOrigin(0, 0.5)
+      .setInteractive({ useHandCursor: true })
+      .setData("isStartBtn", true)
+      .setVisible(false)
+      .setAlpha(0.5);
+
+    startBtn.on("pointerdown", async () => {
+      if (!startBtn.visible || startBtn.alpha < 1) return;
+      startBtn.disableInteractive();
+      startBtn.setAlpha(0.5);
+      try {
+        const sock = await createSocket();
+        const matchId = getStoredMatchId();
+        if (!matchId) {
+          console.log("Start failed: no matchId");
+          return;
+        }
+        await sendMatchState(sock, matchId, OpClientStart, {}, `req-start-${Date.now()}`);
+        console.log("sent OpClientStart — Day 37");
+      } catch (e) {
+        console.log("Start failed", e);
+        startBtn.setInteractive({ useHandCursor: true });
+        startBtn.setAlpha(1);
+      }
+    });
+
+    const updateStartBtn = (snap: PrivateSnapshot) => {
+      const shouldShow = shouldShowStartButton(snap);
+      startBtn.setVisible(shouldShow);
+      if (shouldShow) {
+        startBtn.setAlpha(1);
+        startBtn.setInteractive({ useHandCursor: true });
+      } else {
+        startBtn.disableInteractive();
+        startBtn.setAlpha(0.5);
+      }
+    };
+    const unsubStart = subscribePrivateSnapshot(updateStartBtn);
+    this.events.once("shutdown", unsubStart);
+    this.events.once("destroy", unsubStart);
 
     // Table melds: inside tableMelds subspace (mock)
     const mockMelds = [

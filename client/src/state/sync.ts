@@ -176,6 +176,11 @@ export function checkNoLeak(publicJson: string, privateIds: string[]): boolean {
   return ok;
 }
 
+// Day 37: Start button visibility helper — Waiting + host Seat 0 + >=2 players
+export function shouldShowStartButton(snap: PrivateSnapshot): boolean {
+  return snap.gamePhase === "Waiting" && snap.ownSeat === 0 && snap.players.length >= 2;
+}
+
 // Day 36: State machine client — mirrors Go phases.go:15 AllowedOps
 export function allowedOps(gamePhase: string, turnPhase: string): Set<number> {
   const ops = new Set<number>();

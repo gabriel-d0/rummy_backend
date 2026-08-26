@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('Day 14 — Rack shows 11 tiles with no scroll', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/demo/sync');
 	await expect(page.getByText('Mâna ta').first()).toBeVisible();
 	await expect(page.getByText('TRAGE DIN TALON').first()).toBeVisible();
 	const hasScroll = await page.evaluate(() => {

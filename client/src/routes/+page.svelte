@@ -4,9 +4,6 @@
 	import { flip } from 'svelte/animate';
 	import { fade } from 'svelte/transition';
 	import TopBar from '../components/TopBar.svelte';
-	import TableBoard from '../components/TableBoard.svelte';
-	import Rack from '../components/Rack.svelte';
-	import WinnerOverlay from '../components/WinnerOverlay.svelte';
 	import { authStore, authenticate } from '$lib/nakama/auth';
 	import { privateStore, publicStore, _resetForTest as resetGame } from '$lib/game/store';
 	import {
@@ -18,6 +15,7 @@
 		listAvailableMatches,
 		type AvailableMatch
 	} from '$lib/nakama/match';
+	import { goto } from '$app/navigation';
 	import { reconnect } from '$lib/nakama/reconnect';
 	import { colors } from '$lib/ui/tokens';
 
@@ -35,15 +33,6 @@
 	const matchId = $derived($matchStore ?? getStoredMatchId() ?? null);
 	const priv = $derived($privateStore);
 	const pub = $derived($publicStore);
-	const gamePhase = $derived(priv?.gamePhase ?? pub?.gamePhase ?? '');
-	const isWaiting = $derived(gamePhase === 'Waiting');
-	const isPlaying = $derived(priv?.gamePhase === 'Playing' || pub?.gamePhase === 'Playing');
-	const isOpening = $derived(gamePhase === 'OpeningDiscard');
-	const players = $derived(priv?.players ?? pub?.players ?? []);
-	const currentSeat = $derived(priv?.currentSeat ?? pub?.currentSeat ?? -1);
-	const mySeat = $derived(priv?.ownSeat ?? -1);
-	const stockCount = $derived(priv?.stockCount ?? pub?.stockCount ?? 0);
-	const discardLen = $derived(priv?.discardRow.length ?? pub?.discardRow.length ?? 0);
 
 	async function refreshMatches() {
 		if (!$authStore) return;
@@ -79,9 +68,12 @@
 					void _err;
 				}
 			}
-			// initial poll (no auto interval to avoid hard reload — user clicks reîmprospătează)
+			// initial poll
 			refreshMatches();
 		})();
+		// auto poll Camere disponibile in background with Svelte flip/fade — no hard reload
+		const interval = setInterval(refreshMatches, 2500);
+		return () => clearInterval(interval);
 	});
 
 	async function handleCreate() {
@@ -90,6 +82,7 @@
 		try {
 			const id = await createMatch();
 			joinIdInput = id;
+			await goto(resolve('/game'));
 		} catch (err) {
 			matchError = (err as Error)?.message ?? 'Create failed';
 		} finally {
@@ -106,6 +99,7 @@
 		matchError = '';
 		try {
 			await joinMatch(joinIdInput.trim());
+			await goto(resolve('/game'));
 		} catch (err) {
 			matchError = (err as Error)?.message ?? 'Join failed';
 		} finally {
@@ -117,6 +111,13 @@
 		joinIdInput = id;
 		await handleJoin();
 	}
+
+	// Auto-redirect to game when already in a match (priv/pub set)
+	$effect(() => {
+		if ((priv || pub) && isAuthed) {
+			goto(resolve('/game'));
+		}
+	});
 
 	function handleCopyMatchId() {
 		if (matchId) {
@@ -142,10 +143,9 @@
 
 <div class="flex min-h-screen flex-col bg-[#0a2e1a]">
 	<TopBar />
-	<WinnerOverlay />
 	<div class="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-3 p-3 lg:flex-row">
 		<div class="flex min-w-0 flex-1 flex-col gap-4">
-			<!-- Lobby / Game header -->
+			<!-- Lobby only — gameplay moved to /game -->
 			<div class="rounded-2xl border border-white/10 p-4" style="background: {colors.felt}">
 				{#if isAuthenticating}
 					<h1
@@ -305,105 +305,25 @@
 						<a href={resolve('/demo/draw')} class="underline">draw</a>
 						• <a href={resolve('/demo/winner')} class="underline">winner</a>
 					</div>
-				{:else if isWaiting}
-					<div class="flex items-center justify-between">
-						<div>
-							<div class="text-sm font-bold text-white">
-								Lobby — Așteptare jucători ({players.length}/4)
-							</div>
-							<div class="mt-1 text-xs text-white/60">
-								Masa: <code class="font-mono text-white">{matchId}</code>
-								<button onclick={handleCopyMatchId} class="ml-2 text-[10px] underline"
-									>copiază</button
-								>
-							</div>
-							<div class="mt-2 flex flex-wrap gap-1.5">
-								{#each players as p (p.seat)}
-									<div class="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white">
-										{p.id.slice(0, 6)} • Seat {p.seat}
-										{p.seat === mySeat ? '(tu)' : ''}
-										{p.hasOpened ? '✓ deschis' : ''}
-									</div>
-								{/each}
-							</div>
-						</div>
-						<button onclick={handleLeave} class="rounded bg-white/10 px-3 py-1 text-xs text-white"
-							>Ieși</button
-						>
-					</div>
-					<div class="mt-3 text-xs text-white/60">
-						Host (Seat 0) apasă <span class="font-bold text-emerald-300">START</span> în bara de sus când
-						sunt 2-4 jucători. TopBar arată START doar pentru host.
-					</div>
-				{:else if isPlaying || isOpening}
-					<div class="flex flex-wrap items-center gap-3 text-xs text-white/80">
-						<span class="rounded bg-white/10 px-2 py-1"
-							>Faza: {gamePhase}
-							{isOpening ? '• Aruncă 1 din 15' : ''} / {priv?.turnPhase ??
-								pub?.turnPhase ??
-								''}</span
-						>
-						<span class="rounded bg-white/10 px-2 py-1"
-							>Tu: Seat {mySeat} {mySeat === currentSeat ? '← rândul tău' : ''}</span
-						>
-						<span class="rounded bg-white/10 px-2 py-1">Rând: Seat {currentSeat}</span>
-						<span class="rounded bg-white/10 px-2 py-1">Stoc: {stockCount}</span>
-						<span class="rounded bg-white/10 px-2 py-1">Aruncări: {discardLen}</span>
-						<span class="rounded bg-white/10 px-2 py-1"
-							>Masă: <code class="font-mono">{matchId?.slice(0, 8) ?? ''}</code></span
-						>
-						<button onclick={handleLeave} class="ml-auto rounded bg-white/10 px-2 py-1 text-xs"
-							>Ieși</button
-						>
-					</div>
 				{:else}
-					<div class="text-sm text-white">Joc: {gamePhase} {priv?.turnPhase ?? ''}</div>
+					<!-- In a match (Waiting/Playing) — go to game -->
+					<div class="text-center">
+						<div class="text-sm font-bold text-white">Ești în masa {matchId?.slice(0, 8)}…</div>
+						<p class="mt-2 text-xs text-white/60">
+							Jocul e pe pagina de joc — vei fi redirecționat automat.
+						</p>
+						<a
+							href={resolve('/game')}
+							class="mt-3 inline-block rounded-xl bg-emerald-500 px-6 py-2 text-sm font-bold text-white"
+							>Mergi la joc →</a
+						>
+						<button
+							onclick={handleLeave}
+							class="ml-2 rounded bg-white/10 px-3 py-1 text-xs text-white">Ieși</button
+						>
+					</div>
 				{/if}
 			</div>
-
-			{#if isPlaying || isOpening || gamePhase === 'RoundComplete'}
-				<!-- Talon (stock) — dispăruse, acum vizibil -->
-				<div class="flex items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-					<div
-						class="grid h-16 w-12 place-items-center rounded-lg bg-[#c9a86a] text-center text-[10px] leading-none font-black text-[#3e2a10] shadow"
-					>
-						<span>TALON</span><span class="text-[14px] leading-none">{stockCount}</span>
-					</div>
-					<div class="text-xs text-white/80">
-						<div class="font-bold text-white">Talon • {stockCount} piese</div>
-						<div class="text-[11px] text-white/60">
-							Aruncări: {discardLen} • Tu Seat {mySeat} • Rând Seat {currentSeat}
-						</div>
-					</div>
-				</div>
-			{/if}
-			<!-- Always show TableBoard/Rack for Day 16 layout tests, but in lobby they are demo fallback -->
-			<TableBoard />
-			<Rack />
-			{#if isWaiting}
-				<div class="rounded-2xl border border-dashed border-white/20 bg-black/10 p-6 text-center">
-					<div class="text-sm font-bold text-white">
-						Masa e gata — aștepți START de la host (Seat 0)
-					</div>
-					<p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-white/60">
-						Când hostul apasă <span class="font-bold text-emerald-300">START</span> vei primi 14 cărți
-						(host 15) și talonul va apărea. Cele 11 cărți de mai sus sunt demo fallback, nu mâna reală.
-					</p>
-				</div>
-			{:else if !priv && !pub}
-				<div
-					class="rounded-2xl border border-white/10 bg-black/10 p-4 text-center text-xs leading-relaxed text-white/60"
-				>
-					<div class="font-bold text-white">Cum joci real cu alt browser:</div>
-					1) Apasă<span class="font-bold text-emerald-300">Creează cameră nouă</span> sus → primești
-					un ID. 2) Pe al doilea browser (Incognito) vezi instant camera în “Camere disponibile” →
-					apasă
-					<span class="font-bold text-white">Intră</span> (fără să tastezi
-					<code class="bg-black/30 px-1">xyz</code>). 3) Host apasă
-					<span class="font-bold text-emerald-300">START</span> în bara neagră sus — amândoi primiți 14/15
-					cărți și talonul, nu 11 demo.
-				</div>
-			{/if}
 		</div>
 		<aside class="hidden w-[300px] shrink-0 flex-col gap-3 lg:flex">
 			<div class="rounded-2xl border border-white/10 bg-black/20 p-3">

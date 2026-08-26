@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test('Day 13 — Table board shows 3 melds with no scroll', async ({ page }) => {
-	await page.goto('/');
+	await page.goto('/demo/sync');
 	await expect(page.getByText('ETALĂRI PE MASĂ').first()).toBeVisible();
 	await expect(page.getByText('66 pct').first()).toBeVisible();
 	await expect(page.getByText('53 pct').first()).toBeVisible();

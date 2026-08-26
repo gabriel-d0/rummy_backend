@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
-	import { privateStore } from '$lib/game/store';
-	import { sendDiscard, sendDrawStock, sendDrawPreviousDiscard } from '$lib/game/actions';
+	import { privateStore, pickupDiscardIndex } from '$lib/game/store';
+	import {
+		sendDiscard,
+		sendDrawStock,
+		sendDrawPreviousDiscard,
+		sendPickupDiscardForMeld
+	} from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
 
@@ -84,6 +89,7 @@
 	let discarding = $state(false);
 	let drawing = $state(false);
 	let drawingPrev = $state(false);
+	let picking = $state(false);
 
 	async function discardSelected() {
 		if (!canDiscard || selected.size !== 1) return;
@@ -121,6 +127,38 @@
 			void _err;
 		} finally {
 			drawingPrev = false;
+		}
+	}
+
+	// Day 33 — Pickup for meld: selected 2 + discardIndex via TableBoard click
+	const canPickup = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return selected.size === 2 && $pickupDiscardIndex !== null;
+		if (!isPlaying || !isMustDraw || !isMyTurn) return false;
+		if (!hasOpened) return false;
+		if (selected.size !== 2) return false;
+		const idx = $pickupDiscardIndex;
+		if (idx === null || idx === undefined) return false;
+		if (!priv.discardRow || idx < 0 || idx >= priv.discardRow.length) return false;
+		if (priv.discardRow[idx].IsOpeningDiscard) return false;
+		return true;
+	});
+
+	async function pickupForMeld() {
+		if (!canPickup || picking) return;
+		const idx = $pickupDiscardIndex;
+		if (idx === null || idx === undefined) return;
+		const ids = [...selected];
+		if (ids.length !== 2) return;
+		picking = true;
+		try {
+			await sendPickupDiscardForMeld(idx, ids);
+			selected.clear();
+			pickupDiscardIndex.set(null);
+		} catch (_err) {
+			void _err;
+		} finally {
+			picking = false;
 		}
 	}
 </script>
@@ -193,6 +231,15 @@
 				{canDrawPrevious
 				? 'bg-sky-500 text-white hover:bg-sky-400'
 				: 'cursor-not-allowed bg-white/10 text-white/40'}">↩ IA ULTIMA</button
+		>
+		<button
+			onclick={pickupForMeld}
+			disabled={!canPickup || picking}
+			data-testid="pickup-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canPickup
+				? 'bg-violet-600 text-white hover:bg-violet-500'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">⬆ RIDICĂ PENTRU ETALARE</button
 		>
 		<button
 			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"

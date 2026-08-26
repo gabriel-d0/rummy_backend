@@ -5,7 +5,8 @@ import {
 	OpClientStart,
 	OpClientDiscard,
 	OpClientDrawStock,
-	OpClientDrawPreviousDiscard
+	OpClientDrawPreviousDiscard,
+	OpClientPickupDiscardForMeld
 } from '../nakama/protocol';
 import { getSocket, createSocket } from '../nakama/socket';
 import { getMatchId, getStoredMatchId } from '../nakama/match';
@@ -138,6 +139,42 @@ export async function sendDrawPreviousDiscard(requestId?: string): Promise<strin
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		await (sock as any).sendMatchState(matchId, OpClientDrawPreviousDiscard, envelope);
+	} catch (_err) {
+		void _err;
+	}
+	return envelope;
+}
+
+export async function sendPickupDiscardForMeld(
+	discardIndex: number,
+	tileIds: string[],
+	requestId?: string
+): Promise<string> {
+	if (discardIndex < 0) throw new Error('discardIndex required');
+	if (!tileIds || tileIds.length !== 2) throw new Error('exactly 2 tileIds required');
+	const matchId = getMatchId() ?? getStoredMatchId() ?? 'mock-match';
+	let sock = getSocket();
+	if (!sock) {
+		try {
+			sock = await createSocket();
+		} catch (_err) {
+			void _err;
+			sock = {
+				sendMatchState: async () => ({})
+			} as unknown as typeof sock;
+		}
+	}
+	const rid =
+		requestId ??
+		(typeof crypto !== 'undefined' && 'randomUUID' in crypto
+			? crypto.randomUUID()
+			: `req-${Date.now()}`);
+	const envelope = NewEnvelope(OpClientPickupDiscardForMeld, { discardIndex, tileIds }, rid);
+	_lastSentRaw = { op: OpClientPickupDiscardForMeld, envelope, matchId };
+	lastSent.set(_lastSentRaw);
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		await (sock as any).sendMatchState(matchId, OpClientPickupDiscardForMeld, envelope);
 	} catch (_err) {
 		void _err;
 	}

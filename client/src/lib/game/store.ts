@@ -16,8 +16,11 @@ export const publicStore = writable<PublicSnapshot | null>(null);
 // lastPrivate mirrors privateStore but also kept as plain variable for quick sync access and reconnection persistence
 export let lastPrivate: PrivateSnapshot | null = null;
 
-// Day 25 — per-seat private snapshot map for reconnection + localStorage rummy_lastPrivate:${seat}
+// Day 25 + 33 — per-seat private snapshot map for reconnection + localStorage rummy_lastPrivate:${seat}
 export const privateBySeat: Map<number, PrivateSnapshot> = new Map();
+
+// Day 33 — pickup discard index selection via TableBoard click
+export const pickupDiscardIndex = writable<number | null>(null);
 
 export function onPrivateSnapshot(snap: unknown): boolean {
 	if (!isValidPrivateSnapshot(snap)) return false;
@@ -161,6 +164,7 @@ export function _resetForTest(): void {
 	privateStore.set(null);
 	publicStore.set(null);
 	privateBySeat.clear();
+	pickupDiscardIndex.set(null);
 	try {
 		// clear persisted lastPrivate keys
 		for (let i = 0; i < 4; i++) {

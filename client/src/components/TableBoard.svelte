@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Tile from './Tile.svelte';
-	import { publicStore } from '$lib/game/store';
+	import { publicStore, pickupDiscardIndex } from '$lib/game/store';
 
 	type Meld = {
 		id: string;
@@ -71,6 +71,14 @@
 		}
 		return melds;
 	});
+
+	// Day 33 — discard row from publicStore, selectable via TableBoard click
+	const discardRow = $derived($publicStore?.discardRow ?? []);
+	const selectedDiscard = $derived($pickupDiscardIndex);
+
+	function selectDiscard(index: number) {
+		pickupDiscardIndex.set(index);
+	}
 </script>
 
 <div
@@ -123,6 +131,36 @@
 				</div>
 			{/each}
 		</div>
+		{#if discardRow.length > 0}
+			<div class="mt-2 flex flex-col gap-1" data-testid="discard-row">
+				<div class="text-[10px] font-semibold tracking-widest text-[#8a7a5a]">
+					ARUNCĂRI • {discardRow.length}
+				</div>
+				<div class="flex flex-wrap gap-1.5">
+					{#each discardRow as entry, idx (entry.Index)}
+						<button
+							onclick={() => selectDiscard(entry.Index)}
+							data-testid="discard-tile-{idx}"
+							class="rounded-lg border-2 p-0.5 {selectedDiscard === entry.Index
+								? 'border-sky-500 bg-sky-50'
+								: entry.IsOpeningDiscard
+									? 'border-red-300 bg-red-50'
+									: 'border-transparent bg-white/80'}"
+						>
+							<Tile
+								colour={entry.Tile.Colour}
+								rank={entry.Tile.Rank}
+								isJoker={entry.Tile.IsJoker}
+								size="table"
+							/>
+							<div class="text-[8px] text-[#8a7a5a]">
+								{entry.Index}{entry.IsOpeningDiscard ? ' • deschidere' : ''}
+							</div>
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
 		<div class="min-h-[40px] flex-1"></div>
 	</div>
 </div>

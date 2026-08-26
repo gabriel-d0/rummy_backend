@@ -15,6 +15,7 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@heroiclabs/nakama-js": "^2.8.0",
     "phaser": "^3.80.0"
   },
   "devDependencies": {

@@ -2,21 +2,17 @@ import Phaser from "phaser";
 import { Preload } from "./scenes/Preload";
 import { TableScene } from "./scenes/TableScene";
 import { RackScene } from "./scenes/RackScene";
+import { GAME_SPACE } from "./ui/LayoutManager";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: "game",
-  width: 1024,
-  height: 768,
+  width: GAME_SPACE.width,
+  height: GAME_SPACE.height,
   backgroundColor: "#0a4d2e",
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 1024,
-    height: 768,
-  },
+  scale: GAME_SPACE.scale,
   scene: [Preload, TableScene, RackScene],
 };
 
 new Phaser.Game(config);
-console.log("Phaser 3 Rummy — Day 20+ subspace Layout — see client/docs/roadmap.md and src/ui/Layout.ts");
+console.log("Phaser 3 Rummy — Day 20+ LayoutManager 1000×1000 GameSpace — see client/docs/layout.md and src/ui/LayoutManager.ts");

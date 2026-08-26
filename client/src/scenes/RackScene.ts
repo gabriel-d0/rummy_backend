@@ -1,35 +1,52 @@
 import Phaser from "phaser";
 import { discardSelected, renderRack, sortRack } from "../ui/Rack";
+import { getLayout } from "../ui/Layout";
 
-// Day 11: RackScene renders PrivateView.OwnRack only (redaction) — 14 this.add.image per tile at x = 100 + i*50
+// Day 11 + Day 19: RackScene renders PrivateView.OwnRack only (redaction) with subspace layout
 export class RackScene extends Phaser.Scene {
   constructor() {
     super("RackScene");
   }
 
   create() {
-    // Day 9: rack background (wood 800x120 with 14 slots)
-    this.add.image(512, 680, "rack");
-    // Day 16: onTileClicked toggles selected Set and tints 0xffff00 — mock red-13, red-1, blue-5 → red-1, red-13, blue-5
+    const layout = getLayout(this.scale.width, this.scale.height);
+
+    // Rack background fills rack subspace (wood 800x120 or full width on mobile, centered)
+    this.add.image(layout.rack.x + layout.rack.w / 2, layout.rack.y + layout.rack.h / 2, "rack").setDisplaySize(layout.rack.w, layout.rack.h);
+
+    // Draw slot outlines for visual clarity (14 slots)
+    for (const slot of layout.rackSlots) {
+      this.add.rectangle(slot.x + slot.w / 2, slot.y + slot.h / 2, slot.w, slot.h, 0x3d2817, 0).setStrokeStyle(1, 0x5a3d1a, 0.5);
+    }
+
+    // Day 12 + Day 16: sorted rack with selection
     const unsorted = [
       { ID: "mock-red-13", Colour: 1, Rank: 13, IsJoker: false },
       { ID: "mock-red-1", Colour: 1, Rank: 1, IsJoker: false },
       { ID: "mock-blue-5", Colour: 3, Rank: 5, IsJoker: false },
     ];
     const mockRack = sortRack(unsorted);
-    renderRack(this, mockRack, 0);
-    // Day 17: dragstart logs tileId, no drop yet
+    // Render centered within rack subspace, not at fixed 100,700
+    const totalW = mockRack.length > 0 ? (mockRack.length - 1) * 62 : 0;
+    const rackCenterX = layout.rack.x + layout.rack.w / 2;
+    const startX = rackCenterX - totalW / 2;
+    renderRack(this, mockRack, 0, { x: startX, y: layout.rack.y + layout.rack.h / 2, spacing: 62 });
+
+    // Day 17: dragstart
     this.input.on("dragstart", (_pointer: any, gameObject: any) => {
       const tileId = gameObject.getData("tileId");
       console.log(`dragstart ${tileId}`);
     });
-    // Day 19: discardSelected validates exactly 1 selected and logs DISCARD {tileId}, no server call yet
+
+    // Day 19: Discard button inside rack subspace top-right, not overlapping
+    const btnX = layout.rack.x + layout.rack.w - 50;
+    const btnY = layout.rack.y - 14;
     const discardBtn = this.add
-      .text(900, 620, "[Discard]", {
+      .text(btnX, btnY, "[Discard]", {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#00ff00",
-        backgroundColor: "#333333",
+        backgroundColor: "#1a3d2e",
         padding: { x: 8, y: 4 },
       })
       .setOrigin(0.5)
@@ -40,14 +57,19 @@ export class RackScene extends Phaser.Scene {
         console.log(`discardSelected success: ${res.tileId}`);
       }
     });
+
     this.add
-      .text(512, 600, "Rack — Day 19 discardSelected + Day 17 dragstart (click tile, then [Discard])", {
+      .text(layout.rack.x + layout.rack.w / 2, layout.info.y + 8, "Rack — Day 19 discardSelected + dragstart (click tile, then [Discard])", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
-        align: "center",
+        backgroundColor: "#00000066",
+        padding: { x: 6, y: 2 },
       })
       .setOrigin(0.5);
-    // Day 20: meldSelected
+
+    this.scale.on("resize", () => {
+      this.scene.restart();
+    });
   }
 }

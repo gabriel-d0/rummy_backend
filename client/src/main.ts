@@ -9,10 +9,14 @@ const config: Phaser.Types.Core.GameConfig = {
   width: 1024,
   height: 768,
   backgroundColor: "#0a4d2e",
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 1024,
+    height: 768,
+  },
   scene: [Preload, TableScene, RackScene],
 };
 
 new Phaser.Game(config);
-console.log(
-  "Phaser 3 Rummy — Day 2 Vite + TypeScript + Phaser scaffold — see client/docs/roadmap.md"
-);
+console.log("Phaser 3 Rummy — Day 20+ subspace Layout — see client/docs/roadmap.md and src/ui/Layout.ts");

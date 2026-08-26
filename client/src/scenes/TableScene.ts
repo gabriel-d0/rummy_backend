@@ -1,38 +1,30 @@
 import Phaser from "phaser";
 import { renderDiscardRow } from "../ui/DiscardRow";
+import { getLayout } from "../ui/Layout";
 import { renderStockCount, renderTurnIndicator } from "../ui/StockCount";
 import { renderTableMelds } from "../ui/TableMelds";
 
-// Day 15: TableScene renders PublicView.TableMelds/DiscardRow/StockCount/CurrentSeat
+// Day 15+ TableScene — now uses subspace Layout for mathematically defined bounds and responsive design
 export class TableScene extends Phaser.Scene {
   constructor() {
     super("TableScene");
   }
 
   create() {
-    // Day 8: table background (green felt 1024x768) behind tiles
-    this.add.image(512, 384, "table").setDisplaySize(1024, 768);
-    // Day 18: drop zone at y=400 (below discard 280, above rack 700, not overlapping melds at 110/180)
-    const dropZone = this.add
-      .rectangle(512, 400, 600, 50, 0xffffff, 0.04)
-      .setStrokeStyle(1, 0xffff00, 0.4)
-      .setInteractive({ dropZone: true });
-    dropZone.setData("isDropZone", true);
-    this.add
-      .text(512, 400, "Drop zone — Day 18 (y=400) — drag tile here", {
-        fontFamily: "monospace",
-        fontSize: "10px",
-        color: "#ffff00",
-        align: "center",
-      })
-      .setOrigin(0.5);
-    this.input.on("drop", (_pointer: any, gameObject: any, dropZoneObj: any) => {
-      if (dropZoneObj.getData("isDropZone")) {
-        const tileId = gameObject.getData("tileId");
-        console.log(`drop ${tileId} at y=400`);
-      }
-    });
-    // Day 13: renderTableMelds with mock PublicView.TableMelds (1 run 1-2-3 red and 1 set 7 red/yellow/blue) at y0=110 to avoid drop zone overlap
+    const layout = getLayout(this.scale.width, this.scale.height);
+
+    // Background fills entire game (will be resized on resize)
+    const bg = this.add.image(layout.width / 2, layout.height / 2, "table").setDisplaySize(layout.width, layout.height);
+    bg.setData("isBg", true);
+
+    // Outer border for debug (subtle)
+    this.add.rectangle(layout.outer.x + layout.outer.w / 2, layout.outer.y + layout.outer.h / 2, layout.outer.w, layout.outer.h, 0x000000, 0).setStrokeStyle(2, 0x8b7355, 0.4);
+
+    // Top bar: Stock + Turn are inside topBar, right-aligned, not overlapping melds
+    renderStockCount(this, 77, { x: layout.topBar.x + layout.topBar.w - 60, y: layout.topBar.y + 18 });
+    renderTurnIndicator(this, 0, "Playing", "MustDraw", { x: layout.topBar.x + layout.topBar.w - 60, y: layout.topBar.y + 45 });
+
+    // Table melds: inside tableMelds subspace
     const mockMelds = [
       {
         ID: "mock-run-1-2-3",
@@ -57,24 +49,64 @@ export class TableScene extends Phaser.Scene {
         OwnerSeat: 1,
       },
     ];
-    renderTableMelds(this, mockMelds, { x: 80, y0: 110, rowHeight: 70, tileSpacing: 50 });
-    // Day 14: renderDiscardRow at x = 80 + i*50 y = 280 with mock IsOpeningDiscard flagged (below melds, above drop zone)
+    renderTableMelds(this, mockMelds, {
+      x: layout.tableMelds.x + 10,
+      y0: layout.tableMelds.y + 10,
+      rowHeight: 70,
+      tileSpacing: 48,
+    });
+
+    // Discard row: inside discardRow subspace
     const mockDiscardRow = [
       { Tile: { ID: "disc-open", Colour: 1, Rank: 7, IsJoker: false }, IsOpeningDiscard: true, Index: 0 },
       { Tile: { ID: "disc-1", Colour: 2, Rank: 3, IsJoker: false }, IsOpeningDiscard: false, Index: 1 },
       { Tile: { ID: "disc-2", Colour: 3, Rank: 9, IsJoker: false }, IsOpeningDiscard: false, Index: 2 },
     ];
-    renderDiscardRow(this, mockDiscardRow, { x: 80, y: 280, spacing: 50 });
-    // Day 15: renderStockCount and TurnIndicator at top-right x=880 (not overlapping melds at x=80) — Day 18 fix: turn at y=105 to avoid stock pile overlap
-    renderStockCount(this, 77, { x: 880, y: 40 });
-    renderTurnIndicator(this, 0, "Playing", "MustDraw", { x: 880, y: 105 });
+    renderDiscardRow(this, mockDiscardRow, {
+      x: layout.discardRow.x + 10,
+      y: layout.discardRow.y + 18,
+      spacing: 50,
+    });
+
+    // Drop zone: inside dropZone subspace
+    const dz = layout.dropZone;
+    const dropZone = this.add.rectangle(dz.x + dz.w / 2, dz.y + dz.h / 2, dz.w, dz.h, 0xffffff, 0.04).setStrokeStyle(1, 0xffff00, 0.4).setInteractive({ dropZone: true });
+    dropZone.setData("isDropZone", true);
     this.add
-      .text(512, 460, "TableScene — Day 15 Stock:77 Current:seat-0 Playing/MustDraw (no overlap)", {
+      .text(dz.x + dz.w / 2, dz.y + dz.h / 2, "Drop zone — drag tile here", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
+    this.input.on("drop", (_pointer: any, gameObject: any, dropZoneObj: any) => {
+      if (dropZoneObj.getData("isDropZone")) {
+        const tileId = gameObject.getData("tileId");
+        console.log(`drop ${tileId} at dropZone`);
+      }
+    });
+
+    // Info text inside info subspace (below drop, above rack)
+    this.add
+      .text(layout.info.x + layout.info.w / 2, layout.info.y + 8, "Table — Stock:77 • seat-0 Playing/MustDraw", {
+        fontFamily: "monospace",
+        fontSize: "10px",
+        color: "#ffff00",
+        backgroundColor: "#00000066",
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(0.5)
+      .setData("isInfo", true);
+
+    // Handle resize — recompute layout and re-render static mocks
+    this.scale.on("resize", (gameSize: Phaser.Structs.Size) => {
+      const nl = getLayout(gameSize.width, gameSize.height);
+      // For MVP we just re-create the scene on resize (simpler than moving all objects)
+      // In production, we would reposition each subspace element
+      this.scene.restart();
+      // Note: RackScene is separate but shares same scale event; it will also recompute
+      void nl;
+    });
   }
 }

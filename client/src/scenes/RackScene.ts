@@ -10,7 +10,7 @@ export class RackScene extends Phaser.Scene {
   create() {
     // Day 9: rack background (wood 800x120 with 14 slots)
     this.add.image(512, 680, "rack");
-    // Day 12: sortRack by Colour then Rank — mock red-13, red-1, blue-5 → red-1, red-13, blue-5
+    // Day 16: onTileClicked toggles selected Set and tints 0xffff00 — mock red-13, red-1, blue-5 → red-1, red-13, blue-5
     const unsorted = [
       { ID: "mock-red-13", Colour: 1, Rank: 13, IsJoker: false },
       { ID: "mock-red-1", Colour: 1, Rank: 1, IsJoker: false },
@@ -19,13 +19,13 @@ export class RackScene extends Phaser.Scene {
     const mockRack = sortRack(unsorted);
     renderRack(this, mockRack, 0);
     this.add
-      .text(512, 620, "RackScene — Day 12 sortRack(red-13,red-1,blue-5 → red-1,red-13,blue-5)", {
+      .text(512, 620, "RackScene — Day 16 onTileClicked(tint 0xffff00) + sortRack", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    // Day 16-20: onTileClicked, dragstart, discardSelected, meldSelected
+    // Day 17-20: dragstart, discardSelected, meldSelected
   }
 }

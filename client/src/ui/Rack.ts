@@ -4,6 +4,30 @@ import type { TileInstance } from "../state/snapshot";
 // Day 11: Rack rendering (static) — draws 14 this.add.image per tile at x = 100 + i*50
 // Mirrors Go TileInstance{ID,Colour,Rank,IsJoker} and PrivateView.OwnRack (redaction)
 
+// Day 16: Tile selection — toggles selected Set<TileInstanceId> and tints selected tile 0xffff00
+export const selected: Set<string> = new Set();
+
+export function onTileClicked(tileId: string): void {
+  if (selected.has(tileId)) {
+    selected.delete(tileId);
+  } else {
+    selected.add(tileId);
+  }
+  console.log(`selected: ${Array.from(selected).join(",")}`);
+}
+
+export function isSelected(tileId: string): boolean {
+  return selected.has(tileId);
+}
+
+export function clearSelected(): void {
+  selected.clear();
+}
+
+export function getSelectedIds(): string[] {
+  return Array.from(selected);
+}
+
 export function renderRack(
   scene: Phaser.Scene,
   tiles: TileInstance[],
@@ -25,7 +49,23 @@ export function renderRack(
     img.setData("isRackTile", true);
     img.setData("tileId", tl.ID);
     img.setData("seat", seat);
-    // Day 12 will add sortRack; for now we just render in given order
+    img.setInteractive({ useHandCursor: true });
+    // Day 16: tint if selected
+    if (isSelected(tl.ID)) {
+      img.setTint(0xffff00);
+    } else {
+      img.clearTint();
+    }
+    img.on("pointerdown", () => {
+      onTileClicked(tl.ID);
+      // Retint after toggle
+      if (isSelected(tl.ID)) {
+        img.setTint(0xffff00);
+      } else {
+        img.clearTint();
+      }
+      console.log(`onTileClicked ${tl.ID} selected: ${isSelected(tl.ID)}`);
+    });
     // Add a small text label for debugging (tile ID short)
     const label = scene.add.text(x0 + i * spacing, y + 36, tl.IsJoker ? "J" : `${tl.Colour}-${tl.Rank}`, {
       fontFamily: "monospace",

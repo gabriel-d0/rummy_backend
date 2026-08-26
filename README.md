@@ -2,7 +2,7 @@
 
 Server-authoritative multiplayer Romanian Tile Rummy for 2–4 players, implemented as a Nakama Go runtime plugin. This is the **Go** version — migrated from TypeScript on 2026-08-25 (`55c7f3b`). See `docs/project-baseline.md` §13 for migration rationale.
 
-The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 10 — Snapshot hardening and reconnection**: validated runs/sets with jokers, 50-point opening, `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`, `DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`, `ROUND_COMPLETE` win detection, and centralized `PublicView`/`PrivateView` versioned `1` with reconnection `PrivateSnapshot` per `Seat` (see `docs/rules-decisions.md` and `docs/daily-log.md`).
+The game follows Romanian Tile Rummy (106 tiles, 2 jokers, 50-point opening meld with at least one run, anticlockwise turns) per `AGENTS.md` and is being built incrementally (“Handmade Hero” vertical slices). Current phase is **Phase 11 — Deterministic simulation and minimal client**: validated runs/sets with jokers, 50-point opening, `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`, `DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`, `ROUND_COMPLETE` win detection, centralized `PublicView`/`PrivateView` versioned `1` with reconnection, plus `TestDeterministicSimulation` harness and minimal CLI `cmd/rummy-cli` (`make cli`) showing `PrivateView` vs `PublicView` redaction (see `docs/rules-decisions.md` and `docs/daily-log.md`).
 
 ## Prerequisites
 
@@ -192,6 +192,33 @@ Envelope: `{"v":1,"op":6,"requestId":"...","payload":{...}}` (`internal/protocol
 8. Write tests: success, invalid atomic rollback, `not_opened`/`already_opened`/`not_your_turn`/`wrong_phase`, duplicate tile, joker immutability, conservation, redaction. Use `playingStateForMeldInitial`/`ForMeldNew` helpers as templates.
 9. Run `make check` (`vet`+`fmt-check`+`test`) and `docker compose build`; update `docs/protocol.md` and `docs/state-machine.md` if phase/payload changed.
 
+## Minimal Test Client (Day 24)
+
+Minimal CLI for protocol validation without a full UI (`cmd/rummy-cli/main.go`, `go vet` clean). It runs a local simulation (in-process `RoundState` via `internal/match` + `internal/setup`) or can be pointed at a real Nakama with `--nakama` (device auth via `defaultkey`).
+
+```bash
+go run ./cmd/rummy-cli --help   # show commands
+go run ./cmd/rummy-cli           # local 2-player simulation
+make cli                         # alias
+```
+
+Inside the REPL:
+
+- `state` — shows `PublicView` (`StockCount`, `DiscardRow`, `TableMelds`, `RackCount`) and `PrivateView.OwnRack` for the current seat (proves no leak: `json.Marshal(PublicView)` never contains `OwnRack` IDs, as in `visibility_test.go`).
+- `switch <alice|bob>` — switch local view (simulates two browsers).
+- `draw` — `DRAW_STOCK` (`MustDraw` → `MeldOrDiscard`).
+- `prev` — `DRAW_PREVIOUS_DISCARD` (latest only, opened).
+- `pickup <idx> <id1> <id2>` — `PICKUP_DISCARD_FOR_MELD` (2 tiles + discard at `idx` + sweep later).
+- `discard <tileId>` — `DISCARD`.
+- `meld <run|set> <id>...` — `MELD_INITIAL` if not opened else `MELD_NEW` (batch of 1 for demo).
+- `extend <meldId> <id>...` — `EXTEND_MELD`.
+- `replace <target> <tileId> <new1> <new2> [jokerId colour rank]` — `REPLACE_JOKER`.
+- `winner` — show `Winner` if `RoundComplete`.
+
+Two local users can play a manual flow: `alice: discard joker-2` → `bob: draw` → `bob: discard bF1` → `alice: draw` → `alice: meld run 5-6-7` etc. Server errors are printed as `OpServerError` JSON with `code`/`message`/`requestId`/`op`. No private data is in `Public JSON bytes` or `OpServerEvent` payloads.
+
+For real Nakama, ensure `docker compose up --build -d` and use `--nakama` (currently falls back to local with a notice, but the envelope format is identical).
+
 ## How to Inspect
 
 - **Nakama console:** `http://127.0.0.1:7351` user `admin` password `password` (local only).
@@ -211,20 +238,21 @@ Envelope: `{"v":1,"op":6,"requestId":"...","payload":{...}}` (`internal/protocol
 ## Docs & Decisions
 
 - `docs/project-baseline.md` — Day 1 audit + language amendment §13.
-- `docs/rules-decisions.md` — binding Romanian Tile Rummy decisions, MVP simplifications, deferred, and `TODO(product)` ambiguities (updated Day 14).
+- `docs/rules-decisions.md` — binding Romanian Tile Rummy decisions, MVP simplifications, deferred, and `TODO(product)` ambiguities (updated Day 19 + Day 15 `Kind` + Day 20 `HARDENING`).
 - `docs/terminology.md` — shared vocabulary (`TileInstanceId`, `Seat`, `Rack`, `Stock`, `DiscardRow`, `HasOpened`, `GamePhase` etc.).
-- `docs/protocol.md` — opcodes, envelope, payload schemas, snapshots, error codes.
-- `docs/state-machine.md` — `GamePhase`/`TurnPhase` and `AllowedOps` matrix.
-- `docs/testing.md` — deterministic test harness, helpers, conservation and redaction checks.
+- `docs/protocol.md` — opcodes, envelope, payload schemas, snapshots, error codes, reconnection `OpServerState` per `rummy_match.go:79`.
+- `docs/state-machine.md` — `GamePhase`/`TurnPhase` and `AllowedOps` matrix plus reconnection `MatchJoin`/`MatchLeave` and `RoundComplete`.
+- `docs/testing.md` — deterministic test harness, helpers, conservation and redaction checks, now includes `TestDeterministicSimulation`.
 - `docs/daily-log.md` — Handmade Hero daily slices (this README is a summary; log is authoritative).
 - `AGENTS.md` — full product spec, tile set, meld rules, increment plan.
+- `cmd/rummy-cli/main.go` — minimal CLI test client (Day 24, `go vet` clean, `make cli`).
 
 ## Next Steps (Roadmap)
 
-After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`/`DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`/`ROUND_COMPLETE`/`SNAPSHOT HARDENING` (Days 13–20, commits `de0d727`/`1b666c8`/`6b0d980`/`456c045`/`0da5f3a`/`8dd8ea9`/`2d278a5`/`3e1b92a`):
+After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`/`DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`/`ROUND_COMPLETE`/`SNAPSHOT HARDENING`/`DETERMINISTIC SIMULATION`/`MINIMAL CLIENT` (Days 13–21, 24, commits `de0d727`/`1b666c8`/`6b0d980`/`456c045`/`0da5f3a`/`8dd8ea9`/`2d278a5`/`3e1b92a`/`01f6a3c`/`this`):
 
-- **Day 21** — `Test harness`/`deterministic end-to-end simulation` (fixed deck/order, simulate `start`→`opening discard`→`draw/discard`→`initial meld`→`extension`→`previous/pickup`→`replace`→`round completion`, invariants after every action).
-- **Days 22–23** already done: developer tooling and refactor; Day 20 snapshot hardening now also done — next polish is final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and optional minimal client adapter (`Day 24`).
+- **Final backend regression** — `make check` (`vet`+`fmt-check`+`test` with `TestDeterministicSimulation` 7 subtests), `docker compose build`, `redaction` exhaustive, `win` invariants, `CheckTileConservation` after every action, no `OpServerEvent` leak of private rack.
+- **Optional polish** — `docs/architecture.md` final, `Makefile` `cli` help, and tag `rummy-mvp-rc1` per `AGENTS.md:135` when `make smoke` passes on a fresh `docker compose up --build -d`.
 - **Reconnection reference:** `internal/match/rummy_match.go:56`/`79` keeps `Players`/`Racks` on `MatchLeave` and re-sends `PrivateView` `OpServerState 100` to that `Seat` only; `docs/state-machine.md` and `docs/protocol.md` now document `PrivateSnapshot` versioned `1`.
 
 ---

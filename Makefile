@@ -31,6 +31,8 @@ help:
 	@echo "  make check       - vet + fmt-check + test (CI baseline)"
 	@echo "  make health      - curl health: console 200, device auth + RPC health"
 	@echo "  make smoke       - full smoke: DB+nakama healthy, runtime loaded, DB conn, console+RPC (scripts/smoke.sh)"
+	@echo "  make cli         - run minimal Rummy CLI (local simulation, 2 players, shows Private vs Public)"
+	@echo "  make cli-help    - show CLI help"
 	@echo ""
 
 # --- Docker ---
@@ -107,3 +109,11 @@ health:
 
 smoke:
 	./scripts/smoke.sh
+
+# --- Minimal test client (Day 24) ---
+cli:
+	@echo "Starting minimal Rummy CLI (local simulation) — see cmd/rummy-cli/main.go"
+	@go run ./cmd/rummy-cli
+
+cli-help:
+	@go run ./cmd/rummy-cli --help

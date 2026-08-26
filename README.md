@@ -249,10 +249,10 @@ For real Nakama, ensure `docker compose up --build -d` and use `--nakama` (curre
 
 ## Next Steps (Roadmap)
 
-After `MELD_INITIAL`/`MELD_NEW`/`EXTEND_MELD`/`DRAW_PREVIOUS`/`PICKUP`/`REPLACE_JOKER`/`ROUND_COMPLETE`/`SNAPSHOT HARDENING`/`DETERMINISTIC SIMULATION`/`MINIMAL CLIENT` (Days 13–21, 24, commits `de0d727`/`1b666c8`/`6b0d980`/`456c045`/`0da5f3a`/`8dd8ea9`/`2d278a5`/`3e1b92a`/`01f6a3c`/`this`):
+Backend MVP complete through `Day 24` minimal client and final regression (`rummy-mvp-rc1`):
 
-- **Final backend regression** — `make check` (`vet`+`fmt-check`+`test` with `TestDeterministicSimulation` 7 subtests), `docker compose build`, `redaction` exhaustive, `win` invariants, `CheckTileConservation` after every action, no `OpServerEvent` leak of private rack.
-- **Optional polish** — `docs/architecture.md` final, `Makefile` `cli` help, and tag `rummy-mvp-rc1` per `AGENTS.md:135` when `make smoke` passes on a fresh `docker compose up --build -d`.
+- **Final backend regression done** — `make check` (`vet`+`fmt-check`+`test` with `TestDeterministicSimulation` 7 subtests, `TestRedactionRoundComplete`, `TestReconnectionRestoresPrivateRack`, `TestWin*` 4, `CheckTileConservation` after every action), `docker compose build` (`backend.so`), fresh `docker compose up -d` → `rummy_nakama` `healthy` `Found runtime modules` `health/version` `rummy` match, `make smoke` `SMOKE PASSED` (`pg_isready`, `healthcheck`, `InitModule`, `rummy_backend.so`, `console 200`, `RPC health`), no `OpServerEvent` leak of private rack (verified `PublicView` JSON never contains `OwnRack` IDs). Tagged `rummy-mvp-rc1`.
+- **Post-MVP optional** — `Phase 16` client polish, `Phase 24` production deployment, `Phase 25` observability, etc. See `docs/architecture.md` and `AGENTS.md` for beyond-MVP plan.
 - **Reconnection reference:** `internal/match/rummy_match.go:56`/`79` keeps `Players`/`Racks` on `MatchLeave` and re-sends `PrivateView` `OpServerState 100` to that `Seat` only; `docs/state-machine.md` and `docs/protocol.md` now document `PrivateSnapshot` versioned `1`.
 
 ---

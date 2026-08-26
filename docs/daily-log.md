@@ -219,9 +219,31 @@ This log records each “one clearly scoped change per day” per `AGENTS.md:5` 
 - **Smoke:** `make smoke` `SMOKE PASSED`; `make cli` manual flow `alice→bob` works, `Public JSON` no leak.
 - **Client:** `cmd/rummy-cli/main.go` `go vet` clean, `make cli-help`/`make cli`, `go run --help` shows `help, state, draw, discard, meld, extend, prev, pickup, replace, winner, switch, quit`.
 
-## Next (Final polish)
+## Final Regression — Backend MVP Release Candidate (Day 78 / Final)
 
-Per `AGENTS.md:135` `Day 23` refactor already done as `ba7d6b8`; after Day 24 client, final backend regression (`make check` + `docker compose build` + `redaction` + `win` invariants) and tag `rummy-mvp-rc1` when `make smoke` passes on a fresh `docker compose up --build -d`. See `docs/architecture.md` and `docs/testing.md` for harness extension.
+| Day | Commit | Files | Goal / Acceptance |
+|-----|--------|-------|-------------------|
+| **78/Final** | `next` `chore: final backend regression and tag rummy-mvp-rc1` | `make check` `docker compose build` `redaction` `win` invariants | Final polish: `make check` (`vet`+`fmt-check`+`test` with `TestDeterministicSimulation` 7 subtests, `TestRedactionRoundComplete`, `TestReconnectionRestoresPrivateRack`, `TestWin*` 4), `docker compose build` (backend.so), fresh `docker compose up -d` → `rummy_nakama` `healthy` `Found runtime modules` `health/version` `rummy` match, `make smoke` `SMOKE PASSED` (`pg_isready`, `healthcheck`, `InitModule`, `rummy_backend.so`, `console 200`, `RPC health`), no `OpServerEvent` leak of private rack (verified `PublicView` JSON never contains `OwnRack` IDs, `PrivateView` per seat only), `CheckTileConservation` `106` after every action. Tag `rummy-mvp-rc1` when `make smoke` passes on fresh `docker compose up --build -d`. |
+
+*Day 78 verified via `make check` + `docker compose build` + `docker compose up -d` + `make smoke` + `go test -run TestRedaction|TestWin|TestDeterministicSimulation`.*
+
+---
+
+## Current State (after Day 78 / Final — rummy-mvp-rc1)
+
+- **Language:** Go `1.23.5` (`go.mod:3`) `nakama-common v1.36.0` `protobuf v1.36.4` (`Dockerfile` `pluginbuilder:3.26.0` → `rummy_backend:local`), `internal/` packages `rules/tile` `match` `setup` `protocol` plus `cmd/rummy-cli`.
+- **Stack:** `docker compose up --build -d` → `rummy_postgres 5433` `rummy_nakama 7350/7351` `healthcheck` `Found runtime modules count 1 [rummy_backend.so]` `Registered Go RPC health/version` `Registered Match rummy` — **fresh `up --build -d` + `make smoke` `SMOKE PASSED` on `2026-08-26`**.
+- **Gameplay implemented:** Full `Waiting→OpeningDiscard→Playing` (`MustDraw→MeldOrDiscard`→`RoundComplete`) with all 9 client ops (`1..9`) and 4 server ops (`100..103`), `DISCARD`/`DRAW_STOCK`/`DRAW_PREVIOUS`/`PICKUP`/`MELD_INITIAL` (50+ run)/`MELD_NEW`/`EXTEND`/`REPLACE_JOKER` and `ROUND_COMPLETE` win, `TableMeld{Kind}` stable, joker immutability `real>=2*joker`, conservation `106`, `PublicView`/`PrivateView` versioned `1` with reconnection `OpServerState 100` per `Seat`, plus `TestDeterministicSimulation` and **minimal CLI `cmd/rummy-cli` (`make cli`)**.
+- **Tests:** `go test ./...` green (28 tests including deterministic simulation 7 subtests, `CheckTileConservation` after every step, exhaustive redaction 9 combos + `snapshot_hardening` 4 + `TestRedactionRoundComplete`, meld matrix 100+ cases, win 4, draw/extend/pickup/replace 20+).
+- **Docs:** `docs/project-baseline.md`, `docs/rules-decisions.md` (Day 19), `docs/terminology.md`, `README.md` (Phase 11 + Phase 12 + Final), `docs/protocol.md` (all 9 ops + `RoundComplete`/`reconnection`), `docs/state-machine.md` (all phases + reconnection), `docs/testing.md` (harness + CLI), `docs/architecture.md` (full `internal/match`/`rules`/`setup`/`protocol` + `cmd/rummy-cli`), `AGENTS.md`, `docs/daily-log.md` (this file) — all `go vet`/`gofmt -l` clean.
+- **CI:** `.github/workflows/ci.yml` `go vet` `gofmt` `go test` `go mod tidy` `docker compose build` on `push/PR main` — green.
+- **Smoke:** `make smoke` `SMOKE PASSED` on fresh `docker compose up --build -d` (`pg_isready`, `healthcheck` `healthy`, `InitModule`, `rummy_backend.so` `Found runtime modules`, `console 200`, `RPC health` via `defaultkey`).
+- **Client:** `cmd/rummy-cli/main.go` `go vet` clean, `make cli-help`/`make cli`, `go run --help` shows commands, manual two-user flow works, no private leak.
+- **Tag:** `rummy-mvp-rc1` — backend MVP release candidate per `AGENTS.md:135` (next step is to push tag).
+
+## Next (Post-MVP)
+
+Beyond `rummy-mvp-rc1`, optional `Phase 24+` per extended roadmap: `Phase 16` client polish, `Phase 24` production deployment, `Phase 25` observability, `Phase 26` security, etc. See `docs/architecture.md` and `AGENTS.md` for beyond-MVP plan. No further backend gameplay is required for MVP.
 
 ---
 

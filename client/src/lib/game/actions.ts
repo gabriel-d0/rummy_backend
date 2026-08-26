@@ -1,10 +1,10 @@
 import { get } from 'svelte/store';
 import { writable } from 'svelte/store';
-import { NewEnvelope, OpClientStart, OpClientDiscard } from '../nakama/protocol';
+import { NewEnvelope, OpClientStart, OpClientDiscard, OpClientDrawStock } from '../nakama/protocol';
 import { getSocket, createSocket } from '../nakama/socket';
 import { getMatchId, getStoredMatchId } from '../nakama/match';
 
-// Day 29-30 — Game actions — Start via OpClientStart 1 + Opening discard via OpClientDiscard 2
+// Day 29-31 — Game actions — Start via OpClientStart 1 + Opening discard via OpClientDiscard 2 + Draw stock via OpClientDrawStock 3
 
 export const lastSent = writable<{ op: number; envelope: string; matchId: string } | null>(null);
 export const lastSentStore = lastSent;
@@ -72,6 +72,36 @@ export async function sendDiscard(tileId: string, requestId?: string): Promise<s
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		await (sock as any).sendMatchState(matchId, OpClientDiscard, envelope);
+	} catch (_err) {
+		void _err;
+	}
+	return envelope;
+}
+
+export async function sendDrawStock(requestId?: string): Promise<string> {
+	const matchId = getMatchId() ?? getStoredMatchId() ?? 'mock-match';
+	let sock = getSocket();
+	if (!sock) {
+		try {
+			sock = await createSocket();
+		} catch (_err) {
+			void _err;
+			sock = {
+				sendMatchState: async () => ({})
+			} as unknown as typeof sock;
+		}
+	}
+	const rid =
+		requestId ??
+		(typeof crypto !== 'undefined' && 'randomUUID' in crypto
+			? crypto.randomUUID()
+			: `req-${Date.now()}`);
+	const envelope = NewEnvelope(OpClientDrawStock, {}, rid);
+	_lastSentRaw = { op: OpClientDrawStock, envelope, matchId };
+	lastSent.set(_lastSentRaw);
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		await (sock as any).sendMatchState(matchId, OpClientDrawStock, envelope);
 	} catch (_err) {
 		void _err;
 	}

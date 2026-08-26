@@ -2,7 +2,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
 	import { privateStore } from '$lib/game/store';
-	import { sendDiscard } from '$lib/game/actions';
+	import { sendDiscard, sendDrawStock } from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
 
@@ -29,8 +29,10 @@
 		else selected.add(id);
 	}
 
-	// Day 30 — Opening discard: derived from privateStore when available, else fallback to prop tiles
+	// Day 30-31 — Opening discard + Draw stock: derived from privateStore when available, else fallback to prop tiles
 	const isOpeningDiscard = $derived($privateStore?.gamePhase === 'OpeningDiscard');
+	const isPlaying = $derived($privateStore?.gamePhase === 'Playing');
+	const isMustDraw = $derived($privateStore?.turnPhase === 'MustDraw');
 	const isMyTurn = $derived(
 		$privateStore ? $privateStore.currentSeat === $privateStore.ownSeat : false
 	);
@@ -55,7 +57,13 @@
 		return false;
 	});
 
+	const canDraw = $derived.by(() => {
+		if (!$privateStore) return false;
+		return isPlaying && isMustDraw && isMyTurn;
+	});
+
 	let discarding = $state(false);
+	let drawing = $state(false);
 
 	async function discardSelected() {
 		if (!canDiscard || selected.size !== 1) return;
@@ -69,6 +77,18 @@
 			void _err;
 		} finally {
 			discarding = false;
+		}
+	}
+
+	async function drawStock() {
+		if (!canDraw || drawing) return;
+		drawing = true;
+		try {
+			await sendDrawStock();
+		} catch (_err) {
+			void _err;
+		} finally {
+			drawing = false;
 		}
 	}
 </script>
@@ -125,8 +145,13 @@
 
 	<div class="mt-3 flex flex-wrap gap-2">
 		<button
-			class="flex-1 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-black hover:bg-emerald-400 sm:flex-none"
-			>▶ TRAGE DIN TALON</button
+			onclick={drawStock}
+			disabled={!canDraw || drawing}
+			data-testid="draw-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canDraw
+				? 'bg-emerald-500 text-black hover:bg-emerald-400'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">▶ TRAGE DIN TALON</button
 		>
 		<button
 			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"

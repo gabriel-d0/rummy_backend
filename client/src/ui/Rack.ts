@@ -50,73 +50,151 @@ export function meldSelected(kind: string): { kind: string; tileIds: string[] } 
     return null;
   }
   const tileIds = Array.from(selected);
-  // For Day 20 we just log, no HasOpened check yet (would need PublicView.HasOpened)
-  // If !HasOpened, it would be MELD_INITIAL else MELD_NEW per docs/state-machine.md
-  console.log(`MELD_${kind.toUpperCase()} {kind: ${kind}, tileIds: [${tileIds.join(",")}]} (no HasOpened check, no server call yet — Day 20)`);
+  console.log(
+    `MELD_${kind.toUpperCase()} {kind: ${kind}, tileIds: [${tileIds.join(",")}]} (no HasOpened check, no server call yet — Day 20)`
+  );
   return { kind, tileIds };
+}
+
+function colourToHex(colour: number): number {
+  switch (colour) {
+    case 1:
+      return 0xe53935;
+    case 2:
+      return 0xf9a825;
+    case 3:
+      return 0x1e88e5;
+    case 4:
+      return 0x212121;
+    default:
+      return 0x757575;
+  }
+}
+
+function rankToLabel(rank: number): string {
+  if (rank === 1) return "A";
+  if (rank === 11) return "J";
+  if (rank === 12) return "Q";
+  if (rank === 13) return "K";
+  return String(rank);
+}
+
+function createTileContainer(
+  scene: Phaser.Scene,
+  tl: TileInstance,
+  x: number,
+  y: number
+): Phaser.GameObjects.Container {
+  const container = scene.add.container(x, y);
+  container.setData("isRackTile", true);
+  container.setData("tileId", tl.ID);
+  container.setSize(48, 64);
+  const bg = scene.add
+    .rectangle(0, 0, 48, 64, 0xffffff)
+    .setStrokeStyle(2, colourToHex(tl.Colour), 1);
+  bg.setData("isRackTile", true);
+  container.add(bg);
+  if (tl.IsJoker) {
+    bg.setFillStyle(0xfff9c4);
+    bg.setStrokeStyle(2, 0xf57f17, 1);
+    const jokerText = scene.add.text(0, 0, "J", {
+      fontFamily: "Inter, monospace",
+      fontSize: "22px",
+      color: "#f57f17",
+      fontStyle: "bold",
+    });
+    jokerText.setOrigin(0.5);
+    jokerText.setData("isRackTile", true);
+    container.add(jokerText);
+    const sub = scene.add.text(0, 14, "Joly", {
+      fontFamily: "monospace",
+      fontSize: "7px",
+      color: "#795548",
+    });
+    sub.setOrigin(0.5);
+    sub.setData("isRackTile", true);
+    container.add(sub);
+  } else {
+    const rankLabel = rankToLabel(tl.Rank);
+    const colourHex = colourToHex(tl.Colour);
+    const colourStr = `#${colourHex.toString(16).padStart(6, "0")}`;
+    const rankText = scene.add.text(0, -4, rankLabel, {
+      fontFamily: "Inter, monospace",
+      fontSize: "20px",
+      color: colourStr,
+      fontStyle: "bold",
+    });
+    rankText.setOrigin(0.5);
+    rankText.setData("isRackTile", true);
+    container.add(rankText);
+    const suit = scene.add.text(0, 18, "●", {
+      fontFamily: "monospace",
+      fontSize: "10px",
+      color: colourStr,
+    });
+    suit.setOrigin(0.5);
+    suit.setData("isRackTile", true);
+    container.add(suit);
+    const idLabel = scene.add.text(0, 26, tl.ID.slice(0, 4), {
+      fontFamily: "monospace",
+      fontSize: "5px",
+      color: "#999999",
+    });
+    idLabel.setOrigin(0.5);
+    idLabel.setAlpha(0.6);
+    idLabel.setData("isRackTile", true);
+    container.add(idLabel);
+  }
+  if (isSelected(tl.ID)) {
+    bg.setStrokeStyle(3, 0xffff00, 1);
+    container.setScale(1.05);
+  }
+  container.setInteractive(
+    new Phaser.Geom.Rectangle(-24, -32, 48, 64),
+    Phaser.Geom.Rectangle.Contains
+  );
+  if ((scene.input as unknown as { setDraggable?: (obj: unknown) => void }).setDraggable) {
+    (scene.input as unknown as { setDraggable: (obj: unknown) => void }).setDraggable(container);
+  }
+  container.on("pointerdown", () => {
+    onTileClicked(tl.ID);
+    if (isSelected(tl.ID)) {
+      bg.setStrokeStyle(3, 0xffff00, 1);
+      container.setScale(1.05);
+    } else {
+      bg.setStrokeStyle(2, colourToHex(tl.Colour), 1);
+      container.setScale(1);
+    }
+    console.log(`onTileClicked ${tl.ID} selected: ${isSelected(tl.ID)}`);
+  });
+  return container;
 }
 
 export function renderRack(
   scene: Phaser.Scene,
   tiles: TileInstance[],
   seat: number,
-  opts?: { x?: number; y?: number; spacing?: number },
-): Phaser.GameObjects.Image[] {
+  opts?: { x?: number; y?: number; spacing?: number }
+): Phaser.GameObjects.Container[] {
   const spacing = opts?.spacing ?? 62;
   const y = opts?.y ?? 700;
-  // Center the rack within the wood rack image (800x120 at 512,680)
-  // Rack left edge is at 512-400=112, but we center tiles at 512
   const totalWidth = tiles.length > 0 ? (tiles.length - 1) * spacing : 0;
   const x0 = (opts?.x ?? 512) - totalWidth / 2;
-  // Clear previous rack images if any (tagged with "rack-tile")
-  const existing = scene.children.list.filter((c) => (c as any).getData?.("isRackTile"));
+  const existing = scene.children.list.filter((c) =>
+    (c as unknown as { getData?: (k: string) => unknown }).getData?.("isRackTile")
+  );
   for (const c of existing) c.destroy();
-
-  const images: Phaser.GameObjects.Image[] = [];
+  const containers: Phaser.GameObjects.Container[] = [];
   for (let i = 0; i < tiles.length; i++) {
     const tl = tiles[i];
-    const key = tl.IsJoker ? "joker" : "tile";
-    const img = scene.add.image(x0 + i * spacing, y, key).setScale(0.9);
-    img.setData("isRackTile", true);
-    img.setData("tileId", tl.ID);
-    img.setData("seat", seat);
-    img.setInteractive({ useHandCursor: true });
-    // Day 17: make draggable and log dragstart (no drop yet)
-    if ((scene.input as any).setDraggable) {
-      scene.input.setDraggable(img);
-    }
-    // Day 16: tint if selected
-    if (isSelected(tl.ID)) {
-      img.setTint(0xffff00);
-    } else {
-      img.clearTint();
-    }
-    img.on("pointerdown", () => {
-      onTileClicked(tl.ID);
-      // Retint after toggle
-      if (isSelected(tl.ID)) {
-        img.setTint(0xffff00);
-      } else {
-        img.clearTint();
-      }
-      console.log(`onTileClicked ${tl.ID} selected: ${isSelected(tl.ID)}`);
-    });
-    // Add a small text label for debugging (tile ID short)
-    const label = scene.add.text(x0 + i * spacing, y + 36, tl.IsJoker ? "J" : `${tl.Colour}-${tl.Rank}`, {
-      fontFamily: "monospace",
-      fontSize: "8px",
-      color: "#ffffff",
-      align: "center",
-    });
-    label.setOrigin(0.5);
-    label.setData("isRackTile", true);
-    images.push(img);
+    const container = createTileContainer(scene, tl, x0 + i * spacing, y);
+    container.setData("seat", seat);
+    containers.push(container);
   }
-  return images;
+  return containers;
 }
 
 export function sortRack(tiles: TileInstance[]): TileInstance[] {
-  // Day 12: sort by Colour then Rank (for later)
   return [...tiles].sort((a, b) => {
     if (a.Colour !== b.Colour) return a.Colour - b.Colour;
     if (a.Rank !== b.Rank) return a.Rank - b.Rank;

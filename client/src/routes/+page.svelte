@@ -2,11 +2,13 @@
 	import TopBar from '../components/TopBar.svelte';
 	import TableBoard from '../components/TableBoard.svelte';
 	import Rack from '../components/Rack.svelte';
+	import WinnerOverlay from '../components/WinnerOverlay.svelte';
 	import { colors } from '$lib/ui/tokens';
 </script>
 
 <div class="flex min-h-screen flex-col bg-[#0a2e1a]">
 	<TopBar />
+	<WinnerOverlay />
 	<div class="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-3 p-3 lg:flex-row">
 		<div class="flex min-w-0 flex-1 flex-col gap-4">
 			<div class="rounded-2xl border border-white/10 p-6" style="background: {colors.felt}">

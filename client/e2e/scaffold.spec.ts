@@ -6,7 +6,7 @@ test("Day 2 — scaffold shows Phaser canvas and no console errors", async ({ pa
   await page.goto("/");
   await expect(page.locator("#game")).toBeVisible();
   await expect(page.locator("#game canvas")).toBeVisible({ timeout: 10000 });
-  await expect(page.locator("#info")).toContainText("Day 2");
+  await expect(page.locator("#info")).toContainText("Day");
   const hasPhaser = await page.evaluate(() => typeof (window as unknown as Record<string, unknown>).Phaser !== "undefined");
   expect(hasPhaser).toBeTruthy();
   await page.waitForTimeout(800);

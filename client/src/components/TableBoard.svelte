@@ -1,6 +1,11 @@
 <script lang="ts">
 	import Tile from './Tile.svelte';
-	import { publicStore, pickupDiscardIndex, selectedMeldId } from '$lib/game/store';
+	import {
+		publicStore,
+		pickupDiscardIndex,
+		selectedMeldId,
+		replaceTargetMeldId
+	} from '$lib/game/store';
 
 	type Meld = {
 		id: string;
@@ -84,6 +89,11 @@
 	function selectMeld(id: string) {
 		selectedMeldId.set(id);
 	}
+
+	function selectJoker(meldId: string) {
+		replaceTargetMeldId.set(meldId);
+		selectedMeldId.set(meldId);
+	}
 </script>
 
 <div
@@ -98,17 +108,33 @@
 	<div class="flex flex-1 flex-col content-start gap-2.5">
 		<div class="flex flex-wrap gap-2.5">
 			{#each displayMelds.slice(0, 2) as meld (meld.id)}
-				<button
+				<div
+					role="button"
+					tabindex="0"
 					onclick={() => selectMeld(meld.id)}
+					onkeydown={(e) => e.key === 'Enter' && selectMeld(meld.id)}
 					data-testid="meld-{meld.id}"
-					class="flex flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
+					class="flex cursor-pointer flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
 					meld.id
 						? 'border-sky-500 bg-sky-50'
 						: 'border-black/5 bg-white/90'}"
 				>
 					<div class="flex flex-wrap gap-1">
 						{#each meld.tiles as t (t.id)}
-							<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+							{#if t.isJoker}
+								<button
+									onclick={(e) => {
+										e.stopPropagation();
+										selectJoker(meld.id);
+									}}
+									data-testid="joker-{meld.id}-{t.id}"
+									class="rounded border border-amber-400"
+								>
+									<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+								</button>
+							{:else}
+								<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+							{/if}
 						{/each}
 					</div>
 					{#if meld.points}
@@ -118,22 +144,38 @@
 							{meld.points} pct
 						</div>
 					{/if}
-				</button>
+				</div>
 			{/each}
 		</div>
 		<div class="flex flex-wrap gap-2.5">
 			{#each displayMelds.slice(2) as meld (meld.id)}
-				<button
+				<div
+					role="button"
+					tabindex="0"
 					onclick={() => selectMeld(meld.id)}
+					onkeydown={(e) => e.key === 'Enter' && selectMeld(meld.id)}
 					data-testid="meld-{meld.id}"
-					class="flex flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
+					class="flex cursor-pointer flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
 					meld.id
 						? 'border-sky-500 bg-sky-50'
 						: 'border-black/5 bg-white/90'}"
 				>
 					<div class="flex flex-wrap gap-1">
 						{#each meld.tiles as t (t.id)}
-							<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+							{#if t.isJoker}
+								<button
+									onclick={(e) => {
+										e.stopPropagation();
+										selectJoker(meld.id);
+									}}
+									data-testid="joker-{meld.id}-{t.id}"
+									class="rounded border border-amber-400"
+								>
+									<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+								</button>
+							{:else}
+								<Tile colour={t.colour} rank={t.rank} isJoker={t.isJoker} size="table" />
+							{/if}
 						{/each}
 					</div>
 					{#if meld.points}
@@ -143,7 +185,7 @@
 							{meld.points} pct
 						</div>
 					{/if}
-				</button>
+				</div>
 			{/each}
 		</div>
 		{#if discardRow.length > 0}

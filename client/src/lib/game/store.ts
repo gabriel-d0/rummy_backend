@@ -19,9 +19,10 @@ export let lastPrivate: PrivateSnapshot | null = null;
 // Day 25 + 33 — per-seat private snapshot map for reconnection + localStorage rummy_lastPrivate:${seat}
 export const privateBySeat: Map<number, PrivateSnapshot> = new Map();
 
-// Day 33 + 37 — pickup discard index + selected meld via TableBoard click
+// Day 33 + 37 + 38 — pickup discard index + selected meld/joker via TableBoard click
 export const pickupDiscardIndex = writable<number | null>(null);
 export const selectedMeldId = writable<string | null>(null);
+export const replaceTargetMeldId = writable<string | null>(null);
 
 export function onPrivateSnapshot(snap: unknown): boolean {
 	if (!isValidPrivateSnapshot(snap)) return false;
@@ -167,6 +168,7 @@ export function _resetForTest(): void {
 	privateBySeat.clear();
 	pickupDiscardIndex.set(null);
 	selectedMeldId.set(null);
+	replaceTargetMeldId.set(null);
 	try {
 		// clear persisted lastPrivate keys
 		for (let i = 0; i < 4; i++) {

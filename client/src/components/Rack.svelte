@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
-	import { privateStore, pickupDiscardIndex, selectedMeldId } from '$lib/game/store';
+	import {
+		privateStore,
+		pickupDiscardIndex,
+		selectedMeldId,
+		replaceTargetMeldId
+	} from '$lib/game/store';
 	import {
 		sendDiscard,
 		sendDrawStock,
@@ -9,7 +14,8 @@
 		sendPickupDiscardForMeld,
 		sendMeldInitial,
 		sendMeldNew,
-		sendExtendMeld
+		sendExtendMeld,
+		sendReplaceJoker
 	} from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
@@ -96,6 +102,7 @@
 	let picking = $state(false);
 	let melding = $state(false);
 	let extending = $state(false);
+	let replacing = $state(false);
 
 	async function discardSelected() {
 		if (!canDiscard || selected.size !== 1) return;
@@ -240,6 +247,41 @@
 			extending = false;
 		}
 	}
+
+	// Day 38 — Replace joker: HasOpened selected==3 MeldOrDiscard myTurn + target with joker
+	const canReplace = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return selected.size === 3 && $replaceTargetMeldId !== null;
+		if (!hasOpened) return false;
+		if (!isPlaying || !isMeldOrDiscard || !isMyTurn) return false;
+		if (selected.size !== 3) return false;
+		if (!$replaceTargetMeldId) return false;
+		const meld = priv.tableMelds.find((m) => m.ID === $replaceTargetMeldId);
+		if (!meld) return false;
+		if (!meld.Tiles.some((t) => t.IsJoker)) return false;
+		return true;
+	});
+
+	async function replaceJoker() {
+		if (!canReplace || replacing) return;
+		const targetMeldId = $replaceTargetMeldId;
+		if (!targetMeldId) return;
+		const ids = [...selected];
+		if (ids.length !== 3) return;
+		const tileId = ids[0];
+		const newMeldTiles = ids.slice(1, 3);
+		replacing = true;
+		try {
+			await sendReplaceJoker(targetMeldId, tileId, newMeldTiles);
+			selected.clear();
+			replaceTargetMeldId.set(null);
+			selectedMeldId.set(null);
+		} catch (_err) {
+			void _err;
+		} finally {
+			replacing = false;
+		}
+	}
 </script>
 
 <div class="w-full rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-xl sm:p-4">
@@ -337,6 +379,15 @@
 				{canExtend
 				? 'bg-teal-600 text-white hover:bg-teal-500'
 				: 'cursor-not-allowed bg-white/10 text-white/40'}">EXTINDE ETALAREA</button
+		>
+		<button
+			onclick={replaceJoker}
+			disabled={!canReplace || replacing}
+			data-testid="replace-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canReplace
+				? 'bg-amber-600 text-white hover:bg-amber-500'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">ÎNLOCUIEȘTE JOLY</button
 		>
 		<button
 			onclick={discardSelected}

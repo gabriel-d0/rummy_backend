@@ -1,7 +1,8 @@
 import Phaser from "phaser";
+import { renderDiscardRow } from "../ui/DiscardRow";
 import { renderTableMelds } from "../ui/TableMelds";
 
-// Day 13: TableScene renders PublicView.TableMelds/DiscardRow/StockCount/CurrentSeat
+// Day 14: TableScene renders PublicView.TableMelds/DiscardRow/StockCount/CurrentSeat
 export class TableScene extends Phaser.Scene {
   constructor() {
     super("TableScene");
@@ -36,14 +37,21 @@ export class TableScene extends Phaser.Scene {
       },
     ];
     renderTableMelds(this, mockMelds, { x: 100, y0: 160, rowHeight: 80, tileSpacing: 40 });
+    // Day 14: renderDiscardRow at x = 100 + i*40 y = 300 with mock IsOpeningDiscard flagged
+    const mockDiscardRow = [
+      { Tile: { ID: "disc-open", Colour: 1, Rank: 7, IsJoker: false }, IsOpeningDiscard: true, Index: 0 },
+      { Tile: { ID: "disc-1", Colour: 2, Rank: 3, IsJoker: false }, IsOpeningDiscard: false, Index: 1 },
+      { Tile: { ID: "disc-2", Colour: 3, Rank: 9, IsJoker: false }, IsOpeningDiscard: false, Index: 2 },
+    ];
+    renderDiscardRow(this, mockDiscardRow, { x: 100, y: 300, spacing: 40 });
     this.add
-      .text(512, 320, "TableScene — Day 13 renderTableMelds(1 run 1-2-3 red, 1 set 7)", {
+      .text(512, 340, "TableScene — Day 14 renderDiscardRow(disc-open flagged)", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",
         align: "center",
       })
       .setOrigin(0.5);
-    // Day 14-15 will add renderDiscardRow, renderStockCount, TurnIndicator
+    // Day 15 will add renderStockCount, TurnIndicator
   }
 }

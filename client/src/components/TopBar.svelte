@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { privateStore } from '$lib/game/store';
+	import { privateStore, publicStore } from '$lib/game/store';
 	import { sendStart } from '$lib/game/actions';
 
 	let {
@@ -18,6 +18,15 @@
 
 	const displayPlayers = $derived($privateStore?.players.length ?? players);
 	const displayMasa = $derived(masa);
+
+	// Day 43 — Turn indicator: Current seat + gamePhase/turnPhase + isMyTurn arrow
+	const gamePhase = $derived($privateStore?.gamePhase ?? $publicStore?.gamePhase ?? '');
+	const turnPhase = $derived($privateStore?.turnPhase ?? $publicStore?.turnPhase ?? '');
+	const currentSeat = $derived($privateStore?.currentSeat ?? $publicStore?.currentSeat ?? -1);
+	const isMyTurn = $derived(
+		$privateStore ? $privateStore.currentSeat === $privateStore.ownSeat : false
+	);
+	const showTurn = $derived(gamePhase !== '' && currentSeat >= 0);
 
 	let sending = $state(false);
 
@@ -61,6 +70,31 @@
 			<span class="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span> MASA {displayMasa} • {displayPlayers}
 			JUCĂTORI
 		</div>
+		{#if showTurn}
+			<div
+				data-testid="turn-indicator"
+				aria-label="Turn indicator: current seat {currentSeat}, phase {gamePhase}/{turnPhase}, {isMyTurn
+					? 'your turn'
+					: 'others turn'}"
+				class="hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold sm:flex {isMyTurn
+					? 'border-emerald-400 bg-emerald-500 text-white'
+					: 'border-white/10 bg-white/10 text-white/80'}"
+			>
+				<span data-testid="turn-current">Current: seat-{currentSeat}</span>
+				<span class="opacity-60">•</span>
+				<span>{gamePhase}/{turnPhase || '—'}</span>
+				<span>{isMyTurn ? '← rândul tău' : `← seat-${currentSeat}`}</span>
+			</div>
+			<div
+				data-testid="turn-indicator-mobile"
+				class="flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold sm:hidden {isMyTurn
+					? 'border-emerald-400 bg-emerald-500 text-white'
+					: 'border-white/10 bg-white/10 text-white/70'}"
+			>
+				<span>S{currentSeat}</span>
+				<span>{isMyTurn ? '← tu' : '←'}</span>
+			</div>
+		{/if}
 		<div class="rounded-full bg-white/10 px-2.5 py-1.5 text-xs">🕒 {seconds}s</div>
 		<button class="hidden rounded-full bg-white px-3 py-1.5 text-xs font-bold text-black sm:block"
 			>REGULI</button

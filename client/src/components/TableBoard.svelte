@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Tile from './Tile.svelte';
-	import { publicStore, pickupDiscardIndex } from '$lib/game/store';
+	import { publicStore, pickupDiscardIndex, selectedMeldId } from '$lib/game/store';
 
 	type Meld = {
 		id: string;
@@ -72,12 +72,17 @@
 		return melds;
 	});
 
-	// Day 33 — discard row from publicStore, selectable via TableBoard click
+	// Day 33 — discard row from publicStore, selectable via TableBoard click + Day 37 selected meld
 	const discardRow = $derived($publicStore?.discardRow ?? []);
 	const selectedDiscard = $derived($pickupDiscardIndex);
+	const selectedMeld = $derived($selectedMeldId);
 
 	function selectDiscard(index: number) {
 		pickupDiscardIndex.set(index);
+	}
+
+	function selectMeld(id: string) {
+		selectedMeldId.set(id);
 	}
 </script>
 
@@ -93,8 +98,13 @@
 	<div class="flex flex-1 flex-col content-start gap-2.5">
 		<div class="flex flex-wrap gap-2.5">
 			{#each displayMelds.slice(0, 2) as meld (meld.id)}
-				<div
-					class="flex flex-wrap items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur"
+				<button
+					onclick={() => selectMeld(meld.id)}
+					data-testid="meld-{meld.id}"
+					class="flex flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
+					meld.id
+						? 'border-sky-500 bg-sky-50'
+						: 'border-black/5 bg-white/90'}"
 				>
 					<div class="flex flex-wrap gap-1">
 						{#each meld.tiles as t (t.id)}
@@ -108,13 +118,18 @@
 							{meld.points} pct
 						</div>
 					{/if}
-				</div>
+				</button>
 			{/each}
 		</div>
 		<div class="flex flex-wrap gap-2.5">
 			{#each displayMelds.slice(2) as meld (meld.id)}
-				<div
-					class="flex flex-wrap items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm backdrop-blur"
+				<button
+					onclick={() => selectMeld(meld.id)}
+					data-testid="meld-{meld.id}"
+					class="flex flex-wrap items-center gap-1 rounded-xl border-2 px-2 py-1.5 shadow-sm backdrop-blur {selectedMeld ===
+					meld.id
+						? 'border-sky-500 bg-sky-50'
+						: 'border-black/5 bg-white/90'}"
 				>
 					<div class="flex flex-wrap gap-1">
 						{#each meld.tiles as t (t.id)}
@@ -128,7 +143,7 @@
 							{meld.points} pct
 						</div>
 					{/if}
-				</div>
+				</button>
 			{/each}
 		</div>
 		{#if discardRow.length > 0}

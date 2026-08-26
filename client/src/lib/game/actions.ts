@@ -8,12 +8,13 @@ import {
 	OpClientDrawPreviousDiscard,
 	OpClientPickupDiscardForMeld,
 	OpClientMeldInitial,
-	OpClientMeldNew
+	OpClientMeldNew,
+	OpClientExtendMeld
 } from '../nakama/protocol';
 import { getSocket, createSocket } from '../nakama/socket';
 import { getMatchId, getStoredMatchId } from '../nakama/match';
 
-// Day 29-36 — Game actions — Start 1 + Opening discard 2 + Draw stock 3 + Draw previous 4 + Pickup 5 + MeldInitial 6 + MeldNew 7
+// Day 29-37 — Game actions — Start 1 + Opening discard 2 + Draw stock 3 + Draw previous 4 + Pickup 5 + MeldInitial 6 + MeldNew 7 + ExtendMeld 8
 
 export const lastSent = writable<{ op: number; envelope: string; matchId: string } | null>(null);
 export const lastSentStore = lastSent;
@@ -268,6 +269,40 @@ export async function sendMeldNew(
 	try {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		await (sock as any).sendMatchState(matchId, OpClientMeldNew, envelope);
+	} catch (_err) {
+		void _err;
+	}
+	return envelope;
+}
+
+export async function sendExtendMeld(
+	meldId: string,
+	tileIds: string[],
+	requestId?: string
+): Promise<string> {
+	if (!meldId) throw new Error('meldId required');
+	if (!tileIds || tileIds.length < 1) throw new Error('tileIds required');
+	const matchId = getMatchId() ?? getStoredMatchId() ?? 'mock-match';
+	let sock = getSocket();
+	if (!sock) {
+		try {
+			sock = await createSocket();
+		} catch (_err) {
+			void _err;
+			sock = { sendMatchState: async () => ({}) } as unknown as typeof sock;
+		}
+	}
+	const rid =
+		requestId ??
+		(typeof crypto !== 'undefined' && 'randomUUID' in crypto
+			? crypto.randomUUID()
+			: `req-${Date.now()}`);
+	const envelope = NewEnvelope(OpClientExtendMeld, { meldId, tileIds }, rid);
+	_lastSentRaw = { op: OpClientExtendMeld, envelope, matchId };
+	lastSent.set(_lastSentRaw);
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		await (sock as any).sendMatchState(matchId, OpClientExtendMeld, envelope);
 	} catch (_err) {
 		void _err;
 	}

@@ -1,14 +1,15 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
-	import { privateStore, pickupDiscardIndex } from '$lib/game/store';
+	import { privateStore, pickupDiscardIndex, selectedMeldId } from '$lib/game/store';
 	import {
 		sendDiscard,
 		sendDrawStock,
 		sendDrawPreviousDiscard,
 		sendPickupDiscardForMeld,
 		sendMeldInitial,
-		sendMeldNew
+		sendMeldNew,
+		sendExtendMeld
 	} from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
@@ -94,6 +95,7 @@
 	let drawingPrev = $state(false);
 	let picking = $state(false);
 	let melding = $state(false);
+	let extending = $state(false);
 
 	async function discardSelected() {
 		if (!canDiscard || selected.size !== 1) return;
@@ -207,6 +209,37 @@
 			melding = false;
 		}
 	}
+
+	// Day 37 — Extend meld: HasOpened selected>=1 MeldOrDiscard myTurn + meld selected
+	const canExtend = $derived.by(() => {
+		const priv = $privateStore;
+		if (!priv) return selected.size >= 1 && $selectedMeldId !== null;
+		if (!hasOpened) return false;
+		if (!isPlaying || !isMeldOrDiscard || !isMyTurn) return false;
+		if (selected.size < 1) return false;
+		if (!$selectedMeldId) return false;
+		const meld = priv.tableMelds.find((m) => m.ID === $selectedMeldId);
+		if (!meld) return false;
+		return true;
+	});
+
+	async function extendMeld() {
+		if (!canExtend || extending) return;
+		const meldId = $selectedMeldId;
+		if (!meldId) return;
+		const ids = [...selected];
+		if (ids.length < 1) return;
+		extending = true;
+		try {
+			await sendExtendMeld(meldId, ids);
+			selected.clear();
+			selectedMeldId.set(null);
+		} catch (_err) {
+			void _err;
+		} finally {
+			extending = false;
+		}
+	}
 </script>
 
 <div class="w-full rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-xl sm:p-4">
@@ -295,6 +328,15 @@
 				{canMeld
 				? 'bg-indigo-600 text-white hover:bg-indigo-500'
 				: 'cursor-not-allowed bg-white/10 text-white/40'}">ETALEAZĂ SELECTATE</button
+		>
+		<button
+			onclick={extendMeld}
+			disabled={!canExtend || extending}
+			data-testid="extend-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canExtend
+				? 'bg-teal-600 text-white hover:bg-teal-500'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">EXTINDE ETALAREA</button
 		>
 		<button
 			onclick={discardSelected}

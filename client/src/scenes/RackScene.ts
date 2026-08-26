@@ -108,7 +108,6 @@ export class RackScene extends Phaser.Scene {
       0x5d4037
     );
     rackBg.setStrokeStyle(2, 0x3e2723, 0.8);
-    // @ts-ignore: rounded not in types but available at runtime
     if ((rackBg as unknown as { setRounded?: (r: number) => void }).setRounded) {
       (rackBg as unknown as { setRounded: (r: number) => void }).setRounded(12);
     }
@@ -194,34 +193,30 @@ export class RackScene extends Phaser.Scene {
       };
       const tileId = String(g?.getData?.("tileId") ?? "");
       const orig = dragOrig.get(tileId);
-      // Check if dropped in drop zone (which is in TableScene at GAME_SPACE.width/2, dropY)
-      // For cross-scene, we check pointer position against drop zone bounds in GAME_SPACE
-      const p = pointer as { x: number; y: number };
-      // Drop zone is at bottom of TableArea (see TableScene) — centered, 500x36
+      const p = pointer as { x: number; y: number; worldX?: number; worldY?: number };
+      const px = p.worldX ?? p.x;
+      const py = p.worldY ?? p.y;
       const dropH = 36;
       const dropY = s.TableArea.y + s.TableArea.height - dropH - 8;
       const dropX = GAME_SPACE.width / 2;
       const dropW = 500;
       const inDropZone =
-        p.x >= dropX - dropW / 2 &&
-        p.x <= dropX + dropW / 2 &&
-        p.y >= dropY &&
-        p.y <= dropY + dropH;
+        px >= dropX - dropW / 2 && px <= dropX + dropW / 2 && py >= dropY && py <= dropY + dropH;
       if (inDropZone) {
-        console.log(`drop ${String(tileId)} at dropZone — RackScene dragend`);
-        this.game.events.emit("rummy:drop", { tileId, x: p.x, y: p.y });
+        console.log(`drop ${String(tileId)} at dropZone — RackScene dragend world ${px},${py}`);
+        this.game.events.emit("rummy:drop", { tileId, x: px, y: py });
         dragOrig.delete(tileId);
         return;
       }
-      // Snap back to rack if not dropped in zone — restore original position
-      if (orig && typeof (g as unknown as { setPosition?: unknown }).setPosition === "function") {
-        (g as unknown as { setPosition: (x: number, y: number) => void }).setPosition(
-          orig.x,
-          orig.y
-        );
-      } else if (orig) {
-        g.x = orig.x;
-        g.y = orig.y;
+      if (orig) {
+        // Snap back with tween for modern feel
+        this.tweens.add({
+          targets: g,
+          x: orig.x,
+          y: orig.y,
+          duration: 180,
+          ease: "Back.easeOut",
+        });
       }
       dragOrig.delete(tileId);
     });

@@ -24,7 +24,6 @@ export class TableScene extends Phaser.Scene {
 
   private renderPublicSnapshot(snap: PublicSnapshot): void {
     const s = getSubspaces();
-    // TopBar: Stock left, Turn right, no overlap
     renderStockCount(this, snap.stockCount, {
       x: s.TopBar.x + 80,
       y: s.TopBar.y + s.TopBar.height / 2,
@@ -33,16 +32,18 @@ export class TableScene extends Phaser.Scene {
       x: s.TopBar.x + s.TopBar.width - 120,
       y: s.TopBar.y + s.TopBar.height / 2,
     });
-    // MeldArea and DiscardRowArea are proportional subdivisions of TableArea
+    // Center melds in MeldArea and discard in DiscardRowArea
+    const meldX = s.MeldArea.x + s.MeldArea.width / 2 - 140;
+    const discardX = s.DiscardRowArea.x + s.DiscardRowArea.width / 2 - 75;
     renderTableMelds(this, snap.tableMelds, {
-      x: s.MeldArea.x + 10,
-      y0: s.MeldArea.y + 10,
+      x: meldX,
+      y0: s.MeldArea.y + 16,
       rowHeight: 70,
       tileSpacing: 48,
     });
     renderDiscardRow(this, snap.discardRow, {
-      x: s.DiscardRowArea.x + 10,
-      y: s.DiscardRowArea.y + 16,
+      x: discardX,
+      y: s.DiscardRowArea.y + s.DiscardRowArea.height / 2,
       spacing: 50,
     });
     // Update info text
@@ -137,7 +138,7 @@ export class TableScene extends Phaser.Scene {
     this.events.once("shutdown", unsubStart);
     this.events.once("destroy", unsubStart);
 
-    // Table melds: inside MeldArea (proportional, not tableMelds subspace)
+    // Table melds: centered in MeldArea
     const mockMelds = [
       {
         ID: "mock-run-1-2-3",
@@ -162,14 +163,15 @@ export class TableScene extends Phaser.Scene {
         OwnerSeat: 1,
       },
     ];
+    const meldX = s.MeldArea.x + s.MeldArea.width / 2 - 140;
     renderTableMelds(this, mockMelds, {
-      x: s.MeldArea.x + 10,
-      y0: s.MeldArea.y + 10,
+      x: meldX,
+      y0: s.MeldArea.y + 16,
       rowHeight: 70,
       tileSpacing: 48,
     });
 
-    // Discard row: inside DiscardRowArea
+    // Discard row: centered in DiscardRowArea
     const mockDiscardRow = [
       {
         Tile: { ID: "disc-open", Colour: 1, Rank: 7, IsJoker: false },
@@ -187,9 +189,10 @@ export class TableScene extends Phaser.Scene {
         Index: 2,
       },
     ];
+    const discardX = s.DiscardRowArea.x + s.DiscardRowArea.width / 2 - 75;
     renderDiscardRow(this, mockDiscardRow, {
-      x: s.DiscardRowArea.x + 10,
-      y: s.DiscardRowArea.y + 16,
+      x: discardX,
+      y: s.DiscardRowArea.y + s.DiscardRowArea.height / 2,
       spacing: 50,
     });
 

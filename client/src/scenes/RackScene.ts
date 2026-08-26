@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { discardSelected, renderRack, sortRack } from "../ui/Rack";
+import { discardSelected, meldSelected, renderRack, sortRack } from "../ui/Rack";
 import { getLayout } from "../ui/Layout";
 
 // Day 11 + Day 19: RackScene renders PrivateView.OwnRack only (redaction) with subspace layout
@@ -57,9 +57,38 @@ export class RackScene extends Phaser.Scene {
         console.log(`discardSelected success: ${res.tileId}`);
       }
     });
+    // Day 20: Meld buttons — validate selected.size>=3 and log MELD_INITIAL or MELD_NEW
+    const meldRunBtn = this.add
+      .text(btnX - 110, btnY, "[Meld Run]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#1a3d2e",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    meldRunBtn.on("pointerdown", () => {
+      const res = meldSelected("run");
+      if (res) console.log(`meldSelected success: run ${res.tileIds.join(",")}`);
+    });
+    const meldSetBtn = this.add
+      .text(btnX - 210, btnY, "[Meld Set]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#00ff00",
+        backgroundColor: "#1a3d2e",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    meldSetBtn.on("pointerdown", () => {
+      const res = meldSelected("set");
+      if (res) console.log(`meldSelected success: set ${res.tileIds.join(",")}`);
+    });
 
     this.add
-      .text(layout.rack.x + layout.rack.w / 2, layout.info.y + 8, "Rack — Day 19 discardSelected + dragstart (click tile, then [Discard])", {
+      .text(layout.rack.x + layout.rack.w / 2, layout.info.y + 8, "Rack — Day 20 meldSelected + Day 19 discardSelected", {
         fontFamily: "monospace",
         fontSize: "10px",
         color: "#ffff00",

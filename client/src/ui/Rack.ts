@@ -39,6 +39,23 @@ export function discardSelected(): { tileId: string } | null {
   return { tileId };
 }
 
+// Day 20: meldSelected validates selected.size>=3 and logs MELD_INITIAL or MELD_NEW, no server call yet
+export function meldSelected(kind: string): { kind: string; tileIds: string[] } | null {
+  if (selected.size < 3) {
+    console.log(`meldSelected failed: selected.size ${selected.size} want >=3`);
+    return null;
+  }
+  if (kind !== "run" && kind !== "set") {
+    console.log(`meldSelected failed: kind ${kind} want run or set`);
+    return null;
+  }
+  const tileIds = Array.from(selected);
+  // For Day 20 we just log, no HasOpened check yet (would need PublicView.HasOpened)
+  // If !HasOpened, it would be MELD_INITIAL else MELD_NEW per docs/state-machine.md
+  console.log(`MELD_${kind.toUpperCase()} {kind: ${kind}, tileIds: [${tileIds.join(",")}]} (no HasOpened check, no server call yet — Day 20)`);
+  return { kind, tileIds };
+}
+
 export function renderRack(
   scene: Phaser.Scene,
   tiles: TileInstance[],

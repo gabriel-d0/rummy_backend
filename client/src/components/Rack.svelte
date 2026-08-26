@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
 	import Tile from './Tile.svelte';
+	import { privateStore } from '$lib/game/store';
+	import { sendDiscard } from '$lib/game/actions';
 
 	type RackTile = { id: string; colour: number; rank: number; isJoker?: boolean };
 
@@ -26,6 +28,49 @@
 		if (selected.has(id)) selected.delete(id);
 		else selected.add(id);
 	}
+
+	// Day 30 — Opening discard: derived from privateStore when available, else fallback to prop tiles
+	const isOpeningDiscard = $derived($privateStore?.gamePhase === 'OpeningDiscard');
+	const isMyTurn = $derived(
+		$privateStore ? $privateStore.currentSeat === $privateStore.ownSeat : false
+	);
+	const rackCount = $derived($privateStore?.ownRack.length ?? tiles.length);
+	const displayTiles = $derived.by(() => {
+		const priv = $privateStore;
+		if (priv && priv.ownRack.length > 0) {
+			return priv.ownRack.map((t) => ({
+				id: t.ID,
+				colour: t.Colour,
+				rank: t.Rank,
+				isJoker: t.IsJoker
+			}));
+		}
+		return tiles;
+	});
+
+	const canDiscard = $derived.by(() => {
+		if (!$privateStore) return selected.size === 1;
+		if (isOpeningDiscard && isMyTurn) return selected.size === 1 && rackCount === 15;
+		// later normal discard will also allow, but for Day 30 only opening
+		return false;
+	});
+
+	let discarding = $state(false);
+
+	async function discardSelected() {
+		if (!canDiscard || selected.size !== 1) return;
+		const tileId = [...selected][0];
+		if (!tileId) return;
+		discarding = true;
+		try {
+			await sendDiscard(tileId);
+			selected.clear();
+		} catch (_err) {
+			void _err;
+		} finally {
+			discarding = false;
+		}
+	}
 </script>
 
 <div class="w-full rounded-2xl border border-white/10 bg-[#1a1a1a] p-3 shadow-xl sm:p-4">
@@ -38,10 +83,16 @@
 			</div>
 			<div>
 				<div class="text-xs font-bold text-white">
-					Mâna ta • {tiles.length} cărți
-					<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
-						>TREBUIE SĂ TRAGI</span
-					>
+					Mâna ta • {rackCount} cărți
+					{#if isOpeningDiscard && isMyTurn}
+						<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
+							>ARUNCĂ CARTEA</span
+						>
+					{:else}
+						<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
+							>TREBUIE SĂ TRAGI</span
+						>
+					{/if}
 				</div>
 				<div class="text-[11px] text-white/60">
 					Click pe carte pentru selectare • Drag pe set pentru lipire
@@ -61,7 +112,7 @@
 	<div
 		class="flex min-h-[110px] flex-wrap content-start justify-center gap-1.5 sm:justify-start sm:gap-2"
 	>
-		{#each tiles as t (t.id)}
+		{#each displayTiles as t (t.id)}
 			<button
 				onclick={() => toggle(t.id)}
 				onkeydown={(e) => e.key === 'Enter' && toggle(t.id)}
@@ -82,8 +133,13 @@
 			>ETALEAZĂ SELECTATE</button
 		>
 		<button
-			class="flex-1 cursor-not-allowed rounded-xl bg-white/10 px-4 py-2.5 text-xs font-bold text-white/40 sm:flex-none"
-			>ARUNCĂ CARTEA</button
+			onclick={discardSelected}
+			disabled={!canDiscard || discarding}
+			data-testid="discard-btn"
+			class="flex-1 rounded-xl px-4 py-2.5 text-xs font-bold sm:flex-none
+				{canDiscard
+				? 'bg-amber-400 text-black hover:bg-amber-300'
+				: 'cursor-not-allowed bg-white/10 text-white/40'}">ARUNCĂ CARTEA</button
 		>
 		<button class="ml-auto hidden text-xs text-white/50 sm:block" onclick={() => selected.clear()}
 			>ANULEAZĂ SELECȚIA</button

@@ -2,7 +2,7 @@
 # Phase 1 Day 4+7: start, stop, logs, clean/reset, build, test, lint, type-check, format + smoke
 # Usage: `make help` for list; all targets are explicit and non-magic per Handmade Hero.
 
-.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt fmt-check test tidy health smoke check
+.PHONY: help build up up-build down restart logs logs-nakama logs-postgres ps clean clean-all reset db-shell vet fmt fmt-check test tidy health smoke check client-lint client-typecheck client-build
 
 # Default: show help
 help:
@@ -33,6 +33,9 @@ help:
 	@echo "  make smoke       - full smoke: DB+nakama healthy, runtime loaded, DB conn, console+RPC (scripts/smoke.sh)"
 	@echo "  make cli         - run minimal Rummy CLI (local simulation, 2 players, shows Private vs Public)"
 	@echo "  make cli-help    - show CLI help"
+	@echo "  make client-lint - lint client (eslint src --ext .ts, Day 4)"
+	@echo "  make client-typecheck - typecheck client (tsc --noEmit, Day 4)"
+	@echo "  make client-build - build client (tsc --noEmit && vite build, Day 4)"
 	@echo ""
 
 # --- Docker ---
@@ -117,3 +120,16 @@ cli:
 
 cli-help:
 	@go run ./cmd/rummy-cli --help
+
+# --- Client (Phaser) — Day 4 Project structure and lint/format ---
+client-lint:
+	@cd client && npm run lint
+
+client-typecheck:
+	@cd client && npm run typecheck
+
+client-build:
+	@cd client && npm run build
+
+client-fmt:
+	@cd client && npm run fmt

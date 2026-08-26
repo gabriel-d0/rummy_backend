@@ -13,4 +13,6 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 new Phaser.Game(config);
-console.log("Phaser 3 Rummy — Day 2 Vite + TypeScript + Phaser scaffold — see client/docs/roadmap.md");
+console.log(
+  "Phaser 3 Rummy — Day 2 Vite + TypeScript + Phaser scaffold — see client/docs/roadmap.md"
+);

@@ -28,3 +28,9 @@ export function NewEnvelope(op: number, payload?: unknown, requestId?: string): 
 export function NewEnvelopeWithRequestId(op: number, requestId: string, payload?: unknown): string {
   return JSON.stringify({ v: Version, op, requestId, payload });
 }
+
+export async function sendMatchState(socket: any, matchId: string, op: number, payload?: unknown, requestId?: string): Promise<void> {
+  const data = NewEnvelope(op, payload, requestId);
+  await socket.sendMatchState(matchId, op, data);
+  console.log(`sent op ${op} to ${matchId} — Day 26`);
+}

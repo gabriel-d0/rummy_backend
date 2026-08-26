@@ -293,20 +293,36 @@
 				TU
 			</div>
 			<div>
-				<div class="text-xs font-bold text-white">
-					Mâna ta • {rackCount} cărți
+				<div class="flex items-center gap-1.5 text-xs font-bold text-white">
+					<span>Mâna ta • {rackCount} cărți</span>
+					{#if hasOpened}
+						<span
+							data-testid="hasopened-badge"
+							class="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-black text-white"
+							>DESCHIS ✓</span
+						>
+					{:else}
+						<span
+							data-testid="hasopened-badge"
+							class="rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-black text-black"
+							>NEDESCHIS • 50+ RUN</span
+						>
+					{/if}
 					{#if isOpeningDiscard && isMyTurn}
 						<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
 							>ARUNCĂ CARTEA</span
 						>
-					{:else}
-						<span class="ml-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-black"
+					{:else if isMustDraw && isMyTurn}
+						<span class="ml-1 rounded bg-sky-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
 							>TREBUIE SĂ TRAGI</span
 						>
 					{/if}
 				</div>
 				<div class="text-[11px] text-white/60">
 					Click pe carte pentru selectare • Drag pe set pentru lipire
+					{#if !hasOpened}
+						<span class="ml-1 text-amber-300">— deschiderea cere ≥50 pct cu cel puțin o suită</span>
+					{/if}
 				</div>
 			</div>
 		</div>

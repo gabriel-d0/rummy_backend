@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Tile from './Tile.svelte';
+	import { publicStore } from '$lib/game/store';
 
 	type Meld = {
 		id: string;
@@ -46,6 +47,26 @@
 			}
 		]
 	} = $props<{ melds?: Meld[] }>();
+
+	// Day 23 — TableBoard subscribes to publicStore, maps TableMeld -> Meld, no OwnRack leak
+	const displayMelds = $derived.by(() => {
+		const pub = $publicStore;
+		if (pub && Array.isArray(pub.tableMelds)) {
+			if (pub.tableMelds.length === 0 && pub.players.length === 0) return melds;
+			return pub.tableMelds.map((tm) => ({
+				id: tm.ID,
+				kind: (tm.Kind === 'set' ? 'set' : 'run') as 'run' | 'set',
+				tiles: tm.Tiles.map((t) => ({
+					id: t.ID,
+					colour: t.Colour,
+					rank: t.Rank,
+					isJoker: t.IsJoker
+				})),
+				points: undefined
+			}));
+		}
+		return melds;
+	});
 </script>
 
 <div
@@ -54,12 +75,12 @@
 	<div
 		class="flex items-center justify-between text-[11px] font-semibold tracking-widest text-[#8a7a5a]"
 	>
-		<span>ETALĂRI PE MASĂ • {melds.length} SETURI</span>
+			<span>ETALĂRI PE MASĂ • {displayMelds.length} SETURI</span>
 		<span class="hidden text-[10px] font-normal sm:inline">Prima etalare min 45 pct</span>
 	</div>
 	<div class="flex flex-1 flex-col content-start gap-2.5">
 		<div class="flex flex-wrap gap-2.5">
-			{#each melds.slice(0, 2) as meld (meld.id)}
+			{#each displayMelds.slice(0, 2) as meld (meld.id)}
 				<div
 					class="flex flex-wrap items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm"
 				>
@@ -79,7 +100,7 @@
 			{/each}
 		</div>
 		<div class="flex flex-wrap gap-2.5">
-			{#each melds.slice(2) as meld (meld.id)}
+			{#each displayMelds.slice(2) as meld (meld.id)}
 				<div
 					class="flex flex-wrap items-center gap-1 rounded-xl border border-black/5 bg-white/90 px-2 py-1.5 shadow-sm"
 				>

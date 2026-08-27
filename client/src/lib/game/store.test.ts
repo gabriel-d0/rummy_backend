@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { privateStore, onPrivateSnapshot, getPrivateSnapshot, lastPrivate, _resetForTest } from './store';
-import type { PrivateSnapshot } from './snapshot';
+import {
+	privateStore,
+	publicStore,
+	onPrivateSnapshot,
+	onPublicSnapshot,
+	getPrivateSnapshot,
+	getPublicSnapshot,
+	lastPrivate,
+	_resetForTest
+} from './store';
+import type { PrivateSnapshot, PublicSnapshot } from './snapshot';
 
 describe('Game store — private — Day 22', () => {
 	beforeEach(() => {
@@ -65,5 +74,63 @@ describe('Game store — private — Day 22', () => {
 		const priv = get(privateStore)!;
 		expect(priv.ownRack.map((t) => t.ID)).toEqual(['a1', 'a2', 'a3']);
 		expect(priv.ownRack.length).toBe(3);
+	});
+});
+
+describe('Game store — public — Day 23', () => {
+	beforeEach(() => {
+		_resetForTest();
+	});
+
+	it('publicStore is null initially', () => {
+		expect(get(publicStore)).toBeNull();
+		expect(getPublicSnapshot()).toBeNull();
+	});
+
+	it('onPublicSnapshot sets publicStore', () => {
+		const pub: PublicSnapshot = {
+			v: 1,
+			gamePhase: 'Playing',
+			turnPhase: 'MustDraw',
+			currentSeat: 0,
+			players: [{ id: 'alice', seat: 0, hasOpened: false, rackCount: 14 }],
+			stockCount: 70,
+			discardRow: [],
+			tableMelds: [
+				{
+					ID: 'm1',
+					Kind: 'run',
+					Tiles: [
+						{ ID: 't1', Colour: 1, Rank: 5, IsJoker: false },
+						{ ID: 't2', Colour: 1, Rank: 6, IsJoker: false },
+						{ ID: 't3', Colour: 1, Rank: 7, IsJoker: false }
+					],
+					JokerReps: {},
+					OwnerSeat: 0
+				}
+			],
+			winner: -1
+		};
+		expect(onPublicSnapshot(pub)).toBe(true);
+		expect(get(publicStore)).toEqual(pub);
+		expect(getPublicSnapshot()?.tableMelds.length).toBe(1);
+	});
+
+	it('publicStore TableMelds not OwnRack', () => {
+		const pub: PublicSnapshot = {
+			v: 1,
+			gamePhase: 'Playing',
+			turnPhase: 'MustDraw',
+			currentSeat: 0,
+			players: [{ id: 'alice', seat: 0, hasOpened: false, rackCount: 14 }],
+			stockCount: 70,
+			discardRow: [],
+			tableMelds: [],
+			winner: -1
+		};
+		onPublicSnapshot(pub);
+		const stored = get(publicStore)!;
+		expect(stored.tableMelds).toEqual([]);
+		expect((stored as unknown as { ownRack?: unknown }).ownRack).toBeUndefined();
 	});
 });
